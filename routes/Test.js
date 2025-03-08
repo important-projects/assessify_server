@@ -1,5 +1,6 @@
 const express = require("express");
 const Question = require("../models/Question");
+const User = require("../models/User");
 const Test = require("../models/Test");
 const { protect, isAdmin } = require("./Authentication");
 const router = express.Router();
@@ -45,49 +46,44 @@ router.post("/submit", protect, async (req, res) => {
     const gradedAnswers = await Promise.all(
       answers.map(async (answer) => {
         const question = await Question.findById(answer.questionId);
-
         if (!question) {
-          return res.status(400).json({
-            message: `Question with ID ${answer.questionId} not found.`,
-          });
+          return res.status(400).json({ message: `Question with ID ${answer.questionId} not found.` });
         }
-        // const isCorrect = answer.answer === question.correctAnswer;
-        const isCorrect =
-          String(answer.answer).trim() ===
-          String(question.correctAnswer).trim();
-        const score = isCorrect ? 1 : 0;
-
+        const isCorrect = String(answer.answer).trim() === String(question.correctAnswer).trim();
         return {
           questionId: answer.questionId,
           answer: answer.answer,
           correctAnswer: question.correctAnswer,
           category: question.category,
           isCorrect,
-          score,
+          score: isCorrect ? 1 : 0,
         };
       })
     );
 
-    // Total score
-    const totalScore = gradedAnswers.reduce(
-      (acc, answer) => acc + answer.score,
-      0
-    );
+    // Calculate total score
+    const totalScore = gradedAnswers.reduce((acc, answer) => acc + answer.score, 0);
 
-    // Save test
-    const test = new Test({
-      userId,
-      category,
-      answers: gradedAnswers,
-      totalScore,
-    });
-
+    // Save test result
+    const test = new Test({ userId, category, answers: gradedAnswers, totalScore });
     await test.save();
+
+    // Update user points
+    const user = await User.findById(userId);
+    if (user) {
+      user.points += totalScore * 10; // Example: 10 points per correct answer
+      await user.save();
+
+      // Update badges and streaks
+      await assignBadges(user);
+      await trackUserStreak(user);
+    }
 
     res.status(201).json({
       message: "Test submitted and graded successfully",
       totalScore,
       answers: gradedAnswers,
+      newPoints: user?.points || 0,
     });
   } catch (error) {
     console.error("Error submitting test:", error);

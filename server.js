@@ -8,6 +8,7 @@ const { router: AuthRoutes } = require("./routes/Authentication");
 const TestRoutes = require("./routes/Test");
 const UserDashboardRoutes = require("./routes/UserDashboard");
 const FetchUserRoutes = require("./routes/FetchUser");
+const ForumRoutes = require("./routes/Forum")
 const dotenv = require("dotenv");
 
 const PORT = process.env.PORT || 5000;
@@ -25,7 +26,7 @@ app.use(
     origin: process.env.ALLOWED_ORIGINS?.split(",") || [
       "http://localhost:5173",
       "https://assessify.vercel.app",
-      "https://assessify_server.onrender.com",
+      "https://assessify-server.onrender.com"
     ],
     credentials: true,
   })
@@ -53,6 +54,7 @@ app.use("/auth", AuthRoutes);
 app.use("/test", TestRoutes);
 app.use("/dashboard/user", UserDashboardRoutes);
 app.use("/userdetail", FetchUserRoutes);
+app.use("/forum", ForumRoutes);
 
 app.get("/current-datetime", (req, res) => {
   try {

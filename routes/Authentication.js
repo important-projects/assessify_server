@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const Admin = require("../models/Admin")
+const Admin = require("../models/Admin");
 
 const dotenv = require("dotenv");
 dotenv.config();
@@ -13,40 +13,37 @@ router.post("/register", async (req, res) => {
   const { username, email, password, age, userNumber } = req.body;
 
   if (!username || !email || !password || !age || !userNumber) {
+    console.log("All fields are required");
     return res.status(400).json({ message: "All fields are required" });
   }
 
   try {
-    // Check for an existing email
     const existingUserByEmail = await User.findOne({ email });
     if (existingUserByEmail) {
-      return res.status(400).json({ message: "Email is already taken." });
+      console.log("Email is already in use");
+      return res.status(400).json({ message: "Email used" });
     }
 
-    // Check for an existing username
     const existingUserByUsername = await User.findOne({ username });
     if (existingUserByUsername) {
-      return res.status(400).json({ message: "Username is already taken." });
+      console.log("Username is already in use");
+      return res.status(400).json({ message: "Username used" });
     }
 
-    // Check for an existing user number
     const existingUserByNumber = await User.findOne({ userNumber });
     if (existingUserByNumber) {
-      {
-        return res
-          .status(400)
-          .json({ message: "User number is already taken." });
-      }
+      console.log("User number is already in use");
+      return res.status(400).json({ message: "User number used" });
     }
 
-    // Password saving
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create new user
     const user = new User({
       username,
       email,
-      password,
+      password: hashedPassword, // Use hashed password
       age,
       userNumber,
     });
@@ -65,6 +62,7 @@ router.post("/register", async (req, res) => {
       userNumber: user.userNumber,
     };
 
+    console.log("User registered successfully:", { user: userDetails, token });
     res.status(201).json({
       message: "User registered successfully.",
       user: userDetails,
@@ -80,19 +78,24 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
-  // Input validation
   if (!email || !password) {
+    console.log("Email and password are required");
     return res.status(400).json({ message: "Email and password are required" });
   }
 
   try {
-    // Find user bt email
     const user = await User.findOne({ email }).select("+password");
     if (!user) {
+      console.log("Invalid email");
       return res.status(400).json({ message: "Invalid email" });
     }
 
-    // Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      console.log("Invalid password");
+      return res.status(400).json({ message: "Invalid password" });
+    }
+
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || "1h",
     });
@@ -105,11 +108,14 @@ router.post("/login", async (req, res) => {
       userNumber: user.userNumber,
     };
 
-    return res
-      .status(201)
-      .json({ message: "Login successful.", user: userDetails, token });
+    console.log("Login successful:", { user: userDetails, token });
+    return res.status(200).json({
+      message: "Login successful.",
+      user: userDetails,
+      token,
+    });
   } catch (error) {
-    console.error(error);
+    console.error("Login error:", error);
     return res.status(500).json({ message: "Login error.", error });
   }
 });
@@ -119,17 +125,17 @@ const protect = async (req, res, next) => {
   console.log("Authorization Header:", req.headers.authorization);
 
   if (!req.headers.authorization) {
-    return res
-      .status(401)
-      .json({ message: "Access denied. No token provided." });
+    console.log("No token provided");
+    return res.status(401).json({ message: "Access denied. No token provided." });
   }
 
-  const token = req.headers.authorization?.split(" ")[1];
+  const token = req.headers.authorization.split(" ")[1];
 
   if (!token) {
+    console.log("Access banned due to missing token");
     return res.status(401).json({ message: "Access banned." });
   }
-  // const user = await User.findById(req.user.id);
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
@@ -142,31 +148,27 @@ const protect = async (req, res, next) => {
 };
 
 // Middleware to check if the user is an admin
-
 const isAdmin = async (req, res, next) => {
   try {
-    console.log("Decoded user ID:", req.user.id); // Log the user ID from JWT
+    console.log("Checking admin access for user ID:", req.user?.id);
+
     if (!req.user || !req.user.id) {
-      return res
-        .status(401)
-        .json({ message: "Unauthorized. Admin information is missing." });
+      console.log("Unauthorized access attempt - No admin information found");
+      return res.status(401).json({ message: "Unauthorized. Admin information is missing." });
     }
+
     const admin = await Admin.findById(req.user.id);
 
     if (!admin) {
-      console.log("Admin not found");
-      return res
-        .status(403)
-        .json({ message: "Access forbidden. Admins only." });
+      console.log("Admin not found - Access forbidden");
+      return res.status(403).json({ message: "Access forbidden. Admins only." });
     }
 
-    console.log("Admin found:", admin); // Log the admin details
+    console.log("Admin verified:", admin);
     next();
   } catch (error) {
-    console.error("Error checking admin status:", error.message); // Log the error for debugging
-    return res
-      .status(500)
-      .json({ message: "Error checking admin status", error: error.message });
+    console.error("Error checking admin status:", error.message);
+    return res.status(500).json({ message: "Error checking admin status", error: error.message });
   }
 };
 
