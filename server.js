@@ -8,6 +8,7 @@ const { router: AuthRoutes } = require("./routes/Authentication");
 const TestRoutes = require("./routes/Test");
 const UserDashboardRoutes = require("./routes/UserDashboard");
 const FetchUserRoutes = require("./routes/FetchUser");
+const ForumRoutes = require("./routes/Forum")
 const dotenv = require("dotenv");
 
 const PORT = process.env.PORT || 5000;
@@ -23,9 +24,9 @@ dotenv.config();
 app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(",") || [
-      "http://localhost:5173",
-      "https://assessify.vercel.app",
-      "https://assessify_server.onrender.com",
+      // "http://localhost:5173",
+      "https://assessify-ten.vercel.app",
+      // "https://assessify-server.onrender.com"
     ],
     credentials: true,
   })
@@ -34,25 +35,26 @@ app.use(express.json());
 
 mongoose
   .connect(process.env.DB_URI, {
-    serverSelectionTimeoutMS: 100000, // 30 seconds
+    serverSelectionTimeoutMS: 100000,
   })
   .then(() => {
     console.log("MongoDB connected");
 
-    // Only start the server after MongoDB is connected
+
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
   })
   .catch((err) => {
     console.error("MongoDB connection failed:", err);
-    process.exit(1); // Exit the process with a failure code
+    process.exit(1);
   });
 
 app.use("/auth", AuthRoutes);
 app.use("/test", TestRoutes);
 app.use("/dashboard/user", UserDashboardRoutes);
 app.use("/userdetail", FetchUserRoutes);
+app.use("/forum", ForumRoutes);
 
 app.get("/current-datetime", (req, res) => {
   try {

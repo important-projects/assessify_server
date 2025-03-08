@@ -11,6 +11,9 @@ const userSchema = new mongoose.Schema({
   // hostel: { type: String, required: true },
   userNumber: { type: Number, required: true, unique: true },
   avatarUrl: { type: String },
+  points: {type:Number, default:0},
+  badges:{type:[String],default:[]},
+  streak:{type:Number,default:0}
 });
 
 module.exports = mongoose.model("User", userSchema);

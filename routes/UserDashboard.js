@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { protect } = require("./Authentication");
+const User = ("../models/User");
 const Test = require("../models/Test");
 
 // Get all test results for the user
@@ -68,6 +69,32 @@ router.get("/test/statistics", protect, async (req, res) => {
       message: "Error retrieving pie chart data",
       error: error.message,
     });
+  }
+});
+
+router.get("/leaderboard", protect, async (req, res) => {
+  try {
+    const users = await User.find().sort({ points: -1 }).limit(10);
+
+    // Reward function
+    const rewardUser = async (user) => {
+      if (user.streak === 7) {
+        console.log(`${user.username} has a 7-day streak! Rewarding 100 bonus points.`);
+        user.points += 100;
+      }
+      if (user.points >= 1000 && !user.badges.includes("Elite Scholar")) {
+        console.log(`${user.username} reached 1000 points! Special badge awarded.`);
+        user.badges.push("Elite Scholar");
+      }
+      await user.save();
+    };
+
+    // Process rewards for users
+    await Promise.all(users.map(rewardUser));
+
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching leaderboard", error });
   }
 });
 
