@@ -122,19 +122,17 @@ router.post("/login", async (req, res) => {
 
 // Middleware to authenticate user JWT token
 const protect = async (req, res, next) => {
-  console.log("Authorization Header:", req.headers.authorization);
-
-  if (!req.headers.authorization) {
-    console.log("No token provided");
-    return res.status(401).json({ message: "Access denied. No token provided." });
-  }
-
-  const token = req.headers.authorization.split(" ")[1];
+  const token = req.header("Authorization")?.split(" ")[1];
 
   if (!token) {
     console.log("Access banned due to missing token");
     return res.status(401).json({ message: "Access banned." });
   }
+  if (!req.headers.authorization) {
+    console.log("No token provided");
+    return res.status(401).json({ message: "Access denied. No token provided." });
+  }
+  console.log("Authorization Header:", req.headers.authorization);
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
