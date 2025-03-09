@@ -25,7 +25,7 @@ app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(",") || [
       // "http://localhost:5173",
-      "https://assessify.vercel.app",
+      "https://assessify-ten.vercel.app",
       // "https://assessify-server.onrender.com"
     ],
     methods: "GET,POST,PUT,DELETE",
