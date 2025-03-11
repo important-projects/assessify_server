@@ -117,7 +117,7 @@ router.get('/test/info/:testId', protect, async (req, res) => {
       return res.status(400).json({ message: 'Invalid test ID format' })
     }
 
-    const test = await Test.findOne({ _id: testId, userId })
+    const test = await Test.findById(testId)
 
     if (!test) {
       return res
@@ -312,6 +312,21 @@ router.post('/submit/:testId', protect, async (req, res) => {
   } catch (error) {
     console.error('Error submitting test:', error)
     res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+router.get('/test/questions/:testId', protect, async (req, res) => {
+  try {
+    const { testId } = req.params
+    const test = await Test.findById(testId).populate('questions')
+
+    if (!test) {
+      return res.status(404).json({ message: 'Test not found' })
+    }
+    console.log('Teest questions found:', test)
+    res.status(200).json({ questions: test.questions })
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' })
   }
 })
 
