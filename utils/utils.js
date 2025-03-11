@@ -38,3 +38,4 @@ const trackUserStreak = async (user) => {
 };
 
 await trackUserStreak(user);
+
