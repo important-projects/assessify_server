@@ -27,6 +27,10 @@ const testSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   totalScore: { type: Number, default: 0 },
   answers: [answerSchema],
+  totalObjectiveScore: { type: Number, default: 0 },
+  totalSubjectiveScore: { type: Number, default: 0 },
+  subjectivePending: { type: Boolean, default: false },
+  totalQuestionsAttempted: { type: Number, default: 0 },
   questions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }]
 })
 
