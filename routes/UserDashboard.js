@@ -5,6 +5,61 @@ const User = require('../models/User')
 const Question = require('../models/Question')
 const Test = require('../models/Test')
 const mongoose = require('mongoose')
+const axios = require('axios')
+require('dotenv').config()
+
+// AI Grading Function
+const gradeSubjectiveAnswers = async (testId, subjectiveAnswers) => {
+  try {
+    console.log(`Grading subjective answers for test ${testId}...`)
+
+    for (let ans of subjectiveAnswers) {
+      const { data } = await axios.post(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          model: 'gpt-4',
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are an AI grading assistant. Grade the answer based on correctness and relevance.'
+            },
+            {
+              role: 'user',
+              content: `Question: ${ans.questionText}\nUser Answer: ${ans.answer}\nCorrect Answer: ${ans.correctAnswer}\n\nGrade the answer from 0 to 5, where 5 is completely correct and 0 is wrong. Explain why.`
+            }
+          ],
+          max_tokens: 100
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.GPT_API_KEY}`
+          }
+        }
+      )
+
+      const aiResponse = data.choices[0].message.content
+      const scoreMatch = aiResponse.match(/Score:\s*(\d+)/)
+      const score = scoreMatch ? parseInt(scoreMatch[1]) : 0
+
+      ans.isCorrect = score >= 3
+      ans.score = score
+
+      console.log(`Graded: ${ans.answer} => Score: ${score}`)
+    }
+
+    // Update only the subjective answers in the database
+    await Test.updateOne(
+      { _id: testId },
+      { $set: { answers: subjectiveAnswers } }
+    )
+
+    console.log(`✅ AI grading completed for test ${testId}`)
+  } catch (error) {
+    console.error('❌ Error grading subjective answers:', error)
+  }
+}
 
 // Get all tests and number of tests for a user
 router.get('/tests/total/:userId', protect, async (req, res) => {
@@ -153,22 +208,25 @@ router.post('/test/start/:testId', protect, async (req, res) => {
     let userTestRecord = await Test.findOne({ userId, testId })
 
     if (!userTestRecord) {
-      // First time starting the test
       const startTime = new Date()
       const endTime = new Date(startTime.getTime() + test.duration * 60000)
 
       userTestRecord = new Test({
         userId,
         testId,
+        testName: test.testName,
+        category: test.category,
+        duration: test.duration,
+        dueDate: test.dueDate || new Date(endTime),
         startedAt: startTime,
         endTime: endTime,
-        status: 'in-progress'
+        status: 'ongoing'
       })
 
       await userTestRecord.save()
     }
 
-    const response = {
+    res.status(200).json({
       message: 'Test started successfully',
       testId: test._id,
       testName: test.testName,
@@ -176,10 +234,7 @@ router.post('/test/start/:testId', protect, async (req, res) => {
       duration: test.duration,
       startedAt: userTestRecord.startedAt,
       endTime: userTestRecord.endTime
-    }
-
-    console.log('Test start response:', response)
-    res.status(200).json(response)
+    })
   } catch (error) {
     console.error(error)
     res.status(500).json({ message: 'Server error' })
@@ -211,15 +266,15 @@ router.post('/test/submit/:testId', protect, async (req, res) => {
 
       if (question.questionType === 'objective') {
         isCorrect = ans.answer === question.correctAnswer
-        score = isCorrect ? 1 : 0 // 1 pnt per correct answer
+        score = isCorrect ? 1 : 0
       } else {
-        // Subjective answers will be graded by AI
         isCorrect = null
         score = 0
       }
 
       processedAnswers.push({
         questionId: ans.questionId,
+        questionText: question.text, // ✅ Store question text for AI grading
         answer: ans.answer,
         correctAnswer: question.correctAnswer || null,
         isCorrect,
@@ -240,39 +295,21 @@ router.post('/test/submit/:testId', protect, async (req, res) => {
       testId: test._id,
       status: 'completed'
     }
-    console.log('Test submission response:', response) // Log response
+    console.log('Test submission response:', response)
     res.status(200).json(response)
 
-    // AI grading for subjective answers
+    // AI Grading (Run it asynchronously)
     const subjectiveAnswers = processedAnswers.filter(
       ans => ans.isCorrect === null
     )
     if (subjectiveAnswers.length > 0) {
       gradeSubjectiveAnswers(testId, subjectiveAnswers)
     }
-
-    const gradeSubjectiveAnswers = async (testId, subjectiveAnswers) => {
-      try {
-        console.log(`Grading subjective answers for test ${testId}...`)
-
-        // Simulate AI grading (this will be replaced with an actual AI integration)
-        for (let ans of subjectiveAnswers) {
-          ans.isCorrect = Math.random() > 0.5 // Simulating AI grading
-          ans.score = ans.isCorrect ? 2 : 1 // Subjective answers get 2 points if correct
-        }
-
-        await Test.findByIdAndUpdate(testId, {
-          $set: { answers: subjectiveAnswers }
-        })
-
-        console.log(`AI grading completed for test ${testId}`)
-      } catch (error) {
-        console.error('Error grading subjective answers:', error)
-      }
-    }
   } catch (error) {
     console.error(error)
-    res.status(500).json({ message: 'Server error' })
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Server error' })
+    }
   }
 })
 
@@ -318,14 +355,19 @@ router.post('/submit/:testId', protect, async (req, res) => {
 router.get('/test/questions/:testId', protect, async (req, res) => {
   try {
     const { testId } = req.params
-    const test = await Test.findById(testId).populate('questions')
+
+    const test = await Test.findById(testId).populate('questions') // Populate questions
+
+    const questions = await Question.find({ testId: test._id })
 
     if (!test) {
       return res.status(404).json({ message: 'Test not found' })
     }
-    console.log('Teest questions found:', test)
+
+    console.log('Fetched Questions:', test.questions)
     res.status(200).json({ questions: test.questions })
   } catch (error) {
+    console.error(error)
     res.status(500).json({ message: 'Server error' })
   }
 })

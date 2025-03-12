@@ -170,95 +170,96 @@ require('dotenv').config()
 
 const questionData = []
 
-const categories = {
-  Mathematics: [
-    {
-      questionText: 'What is the derivative of 3x²?',
-      questionType: 'objective',
-      options: ['3x', '6x', 'x²', '9x'],
-      correctAnswer: '6x'
-    },
-    {
-      questionText: 'Solve: 5x - 7 = 3',
-      questionType: 'objective',
-      options: ['x = 2', 'x = -2', 'x = 5', 'x = 1'],
-      correctAnswer: 'x = 2'
-    },
-    {
-      questionText: 'What is the area of a circle with radius 7cm?',
-      questionType: 'objective',
-      options: ['154 cm²', '49 cm²', '77 cm²', '21 cm²'],
-      correctAnswer: '154 cm²'
-    },
-    {
-      questionText: 'Explain the concept of limits in calculus.',
-      questionType: 'subjective',
-      options: [],
-      correctAnswer:
-        'A limit is the value that a function approaches as the input approaches a certain point.'
-    },
-    {
-      questionText: 'Find the integral of x² dx.',
-      questionType: 'subjective',
-      options: [],
-      correctAnswer: 'The integral of x² is (x³)/3 + C.'
-    }
-  ],
-  Science: [
-    {
-      questionText: 'What is the chemical symbol for Gold?',
-      questionType: 'objective',
-      options: ['Au', 'Ag', 'Fe', 'Hg'],
-      correctAnswer: 'Au'
-    },
-    {
-      questionText: 'Which planet is known as the Red Planet?',
-      questionType: 'objective',
-      options: ['Mars', 'Venus', 'Jupiter', 'Saturn'],
-      correctAnswer: 'Mars'
-    },
-    {
-      questionText: "What is Newton's Second Law of Motion?",
-      questionType: 'subjective',
-      options: [],
-      correctAnswer: 'F = ma (Force equals mass times acceleration).'
-    },
-    {
-      questionText: 'Explain the process of photosynthesis.',
-      questionType: 'subjective',
-      options: [],
-      correctAnswer:
-        'Photosynthesis is the process by which green plants convert light energy into chemical energy using carbon dioxide and water.'
-    },
-    {
-      questionText: 'Which gas do plants use for photosynthesis?',
-      questionType: 'objective',
-      options: ['Oxygen', 'Nitrogen', 'Carbon Dioxide', 'Hydrogen'],
-      correctAnswer: 'Carbon Dioxide'
-    }
-  ]
-}
+// const categories = {
+//   Mathematics: [
+//     {
+//       questionText: 'What is the derivative of 3x²?',
+//       questionType: 'objective',
+//       options: ['3x', '6x', 'x²', '9x'],
+//       correctAnswer: '6x'
+//     },
+//     {
+//       questionText: 'Solve: 5x - 7 = 3',
+//       questionType: 'objective',
+//       options: ['x = 2', 'x = -2', 'x = 5', 'x = 1'],
+//       correctAnswer: 'x = 2'
+//     },
+//     {
+//       questionText: 'What is the area of a circle with radius 7cm?',
+//       questionType: 'objective',
+//       options: ['154 cm²', '49 cm²', '77 cm²', '21 cm²'],
+//       correctAnswer: '154 cm²'
+//     },
+//     {
+//       questionText: 'Explain the concept of limits in calculus.',
+//       questionType: 'subjective',
+//       options: [],
+//       correctAnswer:
+//         'A limit is the value that a function approaches as the input approaches a certain point.'
+//     },
+//     {
+//       questionText: 'Find the integral of x² dx.',
+//       questionType: 'subjective',
+//       options: [],
+//       correctAnswer: 'The integral of x² is (x³)/3 + C.'
+//     }
+//   ],
+//   Science: [
+//     {
+//       questionText: 'What is the chemical symbol for Gold?',
+//       questionType: 'objective',
+//       options: ['Au', 'Ag', 'Fe', 'Hg'],
+//       correctAnswer: 'Au'
+//     },
+//     {
+//       questionText: 'Which planet is known as the Red Planet?',
+//       questionType: 'objective',
+//       options: ['Mars', 'Venus', 'Jupiter', 'Saturn'],
+//       correctAnswer: 'Mars'
+//     },
+//     {
+//       questionText: "What is Newton's Second Law of Motion?",
+//       questionType: 'subjective',
+//       options: [],
+//       correctAnswer: 'F = ma (Force equals mass times acceleration).'
+//     },
+//     {
+//       questionText: 'Explain the process of photosynthesis.',
+//       questionType: 'subjective',
+//       options: [],
+//       correctAnswer:
+//         'Photosynthesis is the process by which green plants convert light energy into chemical energy using carbon dioxide and water.'
+//     },
+//     {
+//       questionText: 'Which gas do plants use for photosynthesis?',
+//       questionType: 'objective',
+//       options: ['Oxygen', 'Nitrogen', 'Carbon Dioxide', 'Hydrogen'],
+//       correctAnswer: 'Carbon Dioxide'
+//     }
+//   ]
+// }
 
 // Generating 5 questions for each active test
-const activeTestIds = [
-  '67cf3b0e529ef8d97a1a98aa', // Replace with actual active test IDs
-  '67cf3b0e529ef8d97a1a98bb',
-  '67cf3b0e529ef8d97a1a98cc'
-]
+// const activeTestIds = [
+//   '67cf3b0e529ef8d97a1a98aa', // Replace with actual active test IDs
+//   '67cf3b0e529ef8d97a1a98bb',
+//   '67cf3b0e529ef8d97a1a98cc'
+// ]
 
-for (let testId of activeTestIds) {
-  const category = Math.random() > 0.5 ? 'Mathematics' : 'Science'
+// for (let testId of activeTestIds) {
+//   const category = Math.random() > 0.5 ? 'Mathematics' : 'Science'
 
-  for (let i = 0; i < 5; i++) {
-    questionData.push({
-      category: category,
-      questionText: categories[category][i].questionText,
-      questionType: categories[category][i].questionType,
-      options: categories[category][i].options,
-      correctAnswer: categories[category][i].correctAnswer
-    })
-  }
-}
+//   for (let i = 0; i < 5; i++) {
+//     questionData.push({
+//       category: category,
+//       questionText: categories[category][i].questionText,
+//       questionType: categories[category][i].questionType,
+//       options: categories[category][i].options,
+//       correctAnswer: categories[category][i].correctAnswer
+//     })
+//   }
+// }
+
 // ✅ Connect to MongoDB first
 const insertQuestionData = async () => {
   try {
@@ -269,12 +270,30 @@ const insertQuestionData = async () => {
     })
 
     console.log('Database connected successfully!')
+
+    // Insert new questions if needed
     await Question.insertMany(questionData)
     console.log('✅ Questions inserted successfully!')
 
+    // Fetch all Science questions
+    const scienceQuestions = await Question.find({ category: 'Science' })
+
+    // Extract their IDs
+    const questionIds = scienceQuestions.map(q => q._id)
+
+    // Update Test 35 to include these questions
+    await Test.findByIdAndUpdate(
+      '67d05a92cac1f3ba99acba8f',
+      { $set: { questions: questionIds } },
+      { new: true }
+    )
+
+    console.log('✅ Test 35 updated with Science questions!')
+
+    // Disconnect from DB
     mongoose.disconnect()
   } catch (error) {
-    console.error('❌ Error inserting questions:', error)
+    console.error('❌ Error:', error)
     mongoose.disconnect()
   }
 }

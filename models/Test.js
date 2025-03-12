@@ -6,10 +6,10 @@ const answerSchema = new mongoose.Schema({
     ref: 'Question',
     required: true
   },
-  answer: { type: String, required: true },
+  answer: { type: String, default: '' },
   correctAnswer: { type: String, required: true },
-  isCorrect: { type: Boolean, required: true },
-  score: { type: Number, required: true }
+  isCorrect: { type: Boolean, default: false },
+  score: { type: Number, default: 0 }
 })
 
 const testSchema = new mongoose.Schema({
@@ -19,26 +19,15 @@ const testSchema = new mongoose.Schema({
   status: {
     type: String,
     required: true,
-    enum: ['active', 'completed'],
+    enum: ['pending', 'ongoing', 'completed', 'active'],
     default: 'active'
   },
   duration: { type: Number, required: true },
   dueDate: { type: Date, required: true },
   createdAt: { type: Date, default: Date.now },
   totalScore: { type: Number, default: 0 },
-  answers: [
-    {
-      questionId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Question',
-        required: true
-      },
-      answer: { type: String, default: '' },
-      correctAnswer: { type: String, required: true },
-      isCorrect: { type: Boolean, default: false },
-      score: { type: Number, default: 0 }
-    }
-  ]
+  answers: [answerSchema],
+  questions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }]
 })
 
 module.exports = mongoose.model('Test', testSchema)
