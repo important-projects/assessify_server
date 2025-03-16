@@ -41,23 +41,49 @@ const gradeSubjectiveAnswers = async (testId, subjectiveAnswers) => {
 
       const aiResponse = data.choices[0].message.content
       const scoreMatch = aiResponse.match(/Score:\s*(\d+)/)
-      const score = scoreMatch ? parseInt(scoreMatch[1]) : 0
+      const rawScore = scoreMatch ? parseInt(scoreMatch[1]) : 0
 
-      ans.isCorrect = score >= 3
-      ans.score = score
+      // Assign 1 for scores 3 and above, otherwise 0
+      const finalScore = rawScore >= 3 ? 1 : 0
 
-      console.log(`Graded: ${ans.answer} => Score: ${score}`)
+      ans.isCorrect = finalScore === 1
+      ans.score = finalScore
+
+      console.log(
+        `Graded: ${ans.answer} => AI Score: ${rawScore}, Final Score: ${finalScore}`
+      )
     }
 
     // Update only the subjective answers in the database
     await Test.updateOne(
       { _id: testId },
-      { $set: { answers: subjectiveAnswers } }
+      {
+        $set: {
+          'answers.$[elem].isCorrect': true,
+          'answers.$[elem].score': {
+            $each: subjectiveAnswers.map(ans => ans.score)
+          },
+          totalSubjectiveScore: subjectiveAnswers.reduce(
+            (sum, ans) => sum + ans.score,
+            0
+          ),
+          subjectivePending: false
+        }
+      },
+      {
+        arrayFilters: [
+          {
+            'elem.questionId': {
+              $in: subjectiveAnswers.map(ans => ans.questionId)
+            }
+          }
+        ]
+      }
     )
 
-    console.log(`✅ AI grading completed for test ${testId}`)
+    console.log(`AI grading completed for test ${testId}`)
   } catch (error) {
-    console.error('❌ Error grading subjective answers:', error)
+    console.error('Error grading subjective answers:', error)
   }
 }
 
@@ -274,7 +300,7 @@ router.post('/test/submit/:testId', protect, async (req, res) => {
 
       processedAnswers.push({
         questionId: ans.questionId,
-        questionText: question.text, // ✅ Store question text for AI grading
+        questionText: question.text,
         answer: ans.answer,
         correctAnswer: question.correctAnswer || null,
         isCorrect,
@@ -291,10 +317,13 @@ router.post('/test/submit/:testId', protect, async (req, res) => {
 
     const response = {
       message: 'Test submitted successfully',
-      totalScore,
+      totalScore: totalScore,
+      scoreBreakdown: `${test.totalObjectiveScore}/${test.totalQuestionsAttempted} (Objective)`,
+      subjectivePending: subjectiveAnswers.length > 0,
       testId: test._id,
       status: 'completed'
     }
+
     console.log('Test submission response:', response)
     res.status(200).json(response)
 
@@ -380,15 +409,30 @@ router.get('/performance/:userId', protect, async (req, res) => {
 
     if (!completedTests.length) {
       const response = { message: 'No completed tests found' }
-      console.log('Performance response:', response) // Log response
+      console.log('Performance response:', response)
       return res.json(response)
     }
 
-    const scores = completedTests.map(test => ({
-      testName: test.testName,
-      totalScore: test.totalScore,
-      createdAt: test.createdAt
-    }))
+    const scores = completedTests.map(test => {
+      let totalQuestionsAttempted = test.questions ? test.questions.length : 0
+
+      if (!totalQuestionsAttempted && test.submissions) {
+        totalQuestionsAttempted = test.submissions.length
+      }
+
+      let scoreBreakdown =
+        totalQuestionsAttempted > 0
+          ? `${test.totalScore}/${totalQuestionsAttempted}`
+          : '0/0'
+
+      return {
+        testName: test.testName,
+        totalScore: test.totalScore,
+        totalQuestionsAttempted,
+        scoreBreakdown,
+        createdAt: test.createdAt
+      }
+    })
 
     console.log('Performance response:', scores) // Log response
     res.json(scores)
