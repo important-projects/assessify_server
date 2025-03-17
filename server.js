@@ -10,6 +10,7 @@ const UserDashboardRoutes = require('./routes/UserDashboard')
 const FetchUserRoutes = require('./routes/FetchUser')
 const ForumRoutes = require('./routes/Forum')
 const EmailRoute = require('./routes/Mailer')
+const AdminRoute = require('./routes/Admin')
 const dotenv = require('dotenv')
 
 const PORT = process.env.PORT || 5000
@@ -59,6 +60,7 @@ app.use('/dashboard/user', UserDashboardRoutes)
 app.use('/details', FetchUserRoutes)
 app.use('/forum', ForumRoutes)
 app.use('/assessify', EmailRoute)
+app.use('/admin', AdminRoute)
 
 app.get('/current-datetime', (req, res) => {
   try {

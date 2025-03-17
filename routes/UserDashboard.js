@@ -1,15 +1,500 @@
 const express = require('express')
 const router = express.Router()
 const { protect } = require('./Authentication')
+const Test = require('../models/Test')
+
+// Get all test results for the user
+router.get('/test/results', protect, async (req, res) => {
+  try {
+    // Fetch all tests that belong to the logged-in user
+    const tests = await Test.find({ userId: req.user.id }).populate(
+      'userId',
+      'username email'
+    )
+
+    res.json(tests)
+  } catch (error) {
+    console.error('Error retrieving user test results:', error)
+    res
+      .status(500)
+      .json({ message: 'Error retrieving test results', error: error.message })
+  }
+})
+
+// Get detailed result of a specific test
+router.get('/test/result/:id', protect, async (req, res) => {
+  try {
+    const test = await Test.findById(req.params.id)
+      .populate('userId', 'username email')
+      .populate({
+        path: 'answers.questionId',
+        select: 'questionText category options correctAnswer'
+      })
+    if (!test)
+      return res
+        .status(404)
+        .json({ message: 'Test not found or unauthorized access.' })
+
+    res.json(test)
+  } catch (error) {
+    console.error('Error retrieving test details:', error)
+    res
+      .status(500)
+      .json({ message: 'Error retrieving test details', error: error.message })
+  }
+})
+
+// Get top 10 test scores for the logged-in user
+router.get('/test/top10', protect, async (req, res) => {
+  try {
+    const topScores = await Test.find({ userId: req.user.id })
+      .sort({ totalScore: -1 })
+      .limit(10)
+      .populate('userId', 'username email')
+
+    res.json(topScores)
+  } catch (error) {
+    console.error('Error retrieving top scores:', error)
+    res
+      .status(500)
+      .json({ message: 'Error retrieving top scores', error: error.message })
+  }
+})
+
+/*const express = require('express')
+const router = express.Router()
+const { protect } = require('./Authentication')
 const User = require('../models/User')
 const Question = require('../models/Question')
 const Test = require('../models/Test')
+const UserTest = require('../models/UserTest')
+const Response = require('../models/Response')
+const Results = require('../models/Results')
+const Courses = require('../models/Courses')
 const mongoose = require('mongoose')
 const axios = require('axios')
 require('dotenv').config()
 
+// Get categories
+router.get('/courses', async (req, res) => {
+  try {
+    const categories = await Courses.find()
+
+    if (!categories || categories.length === 0) {
+      return res.status(404).json({ message: 'No courses found' })
+    }
+
+    res.json(categories)
+  } catch (error) {
+    console.error('Error fetching courses:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Get user's test info
+router.get('/test/info/:testId', protect, async (req, res) => {
+  try {
+    const { testId } = req.params
+    const userId = req.user.id
+
+    const test = await Test.findById(testId)
+
+    if (!test) {
+      return res.status(404).json({ message: 'Test not found.' })
+    }
+
+    // Get user's test record (if they have started it)
+    const userTest = await UserTest.findOne({ userId, testId })
+
+    if (!userTest) {
+      return res.status(200).json({
+        message: 'Test found but not started by the user.',
+        test: {
+          _id: test._id,
+          title: test.title,
+          description: test.description,
+          duration: test.duration,
+          status: 'undone'
+        }
+      })
+    }
+
+    res.status(200).json({
+      success: true,
+      test: {
+        _id: test._id,
+        title: test.title,
+        description: test.description,
+        duration: test.duration,
+        status: userTest.status,
+        startTime: userTest.startTime,
+        endTime: userTest.endTime,
+        score: userTest.status === 'completed' ? userTest.score : null
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching test info:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// Route to get all tests of a user
+router.get('/tests/total/:userId', protect, async (req, res) => {
+  try {
+    const { userId } = req.params
+    console.log(
+      'Fetching total tests and total number of tests for user:',
+      userId
+    )
+
+    const user = await User.findById(userId).populate('courseId')
+
+    if (!user) {
+      console.log(`User not found: ${userId}`)
+      return res.status(404).json({ message: 'User or course not found' })
+    }
+
+    if (!user.courseId) {
+      console.log(`User has no course assigned: ${userId}`)
+      return res
+        .status(404)
+        .json({ message: 'User is not assigned to any course.' })
+    }
+
+    // if (!user || !user.courseId) {
+    //   return res.status(404).json({ message: 'User or course not found.' })
+    // }
+
+    const tests = await Test.find({ courseId: user.courseId._id })
+      .populate('courseId', 'title')
+      .select('title createdAt courseId')
+    console.log(`Test found ${tests}`)
+
+    const totalTestsCount = tests.length
+
+    console.log(`Total tests found: ${totalTestsCount} for user ${userId}`)
+
+    res.status(200).json({
+      message: `Total tests found: ${totalTestsCount}`,
+      totalTests: tests,
+      totalTestsCount
+    })
+  } catch (error) {
+    console.error('Error fetching tests:', error)
+    res.status(500).json({ message: 'Server error', error })
+  }
+})
+
+// Route to get all undone tests for a user
+router.get('/tests/active/:userId', protect, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const undoneTests = await Test.find({ userId, status: 'undone' })
+    console.log('Undone tests response:', undoneTests)
+    res
+      .status(200)
+      .json({ message: `Undone tests response: ${undoneTests}`, undoneTests })
+  } catch (error) {
+    console.error('Error fetching undone tests:', error)
+    res.status(500).json({ message: 'Internal server error', error })
+  }
+})
+
+// Get total number of undone tests for a user
+router.get('/tests/active/count/:userId', protect, async (req, res) => {
+  try {
+    const { userId } = req.params
+    console.log('Fetching active test count for user:', userId)
+
+    const undoneTestCount = await Test.countDocuments({
+      userId,
+      status: 'undone'
+    })
+    console.log('Total undone tests:', undoneTestCount)
+
+    res.status(200).json({ message: `Undone tests count: ${undoneTestCount}` })
+  } catch (error) {
+    console.error('Error fetching active test count:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// Route to get info about an undone test for a user
+router.get('/undone-test/:testId', protect, async (req, res) => {
+  try {
+    const { testId } = req.params
+    const userId = req.user.id
+
+    const undoneTest = await Test.findOne({
+      _id: testId,
+      user: userId,
+      status: 'undone'
+    })
+
+    if (!undoneTest) {
+      return res.status(404).json({ message: 'Test not found or completed' })
+    }
+
+    res
+      .status(200)
+      .json({ message: `Fetching undone tests ${undoneTest}`, undoneTest })
+  } catch (error) {
+    console.error('Error fetching undone tests:', error)
+    res.status(500).json({ message: 'Internal server Error' })
+  }
+})
+
+// Route to get total number of undone tests for a user
+router.get('/tests/active/count/:userId', protect, async (req, res) => {
+  try {
+    const { userId } = req.params
+    console.log('Fetching active test count for user:', userId)
+
+    const undoneTestsCount = await Test.countDocuments({
+      userId,
+      status: 'completed'
+    })
+    console.log('Total undone tests:', undoneTestsCount)
+    rs.status(200).json({
+      message: `Total number of undone tests ${undoneTestsCount}`,
+      undoneTestsCount
+    })
+  } catch (error) {
+    console.error('Error fetching undone test count:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// Route to get all completed tests for a user
+router.get('/completed-test/:userId', protect, async (req, res) => {
+  try {
+    const userId = req.user.id
+
+    const completedTests = await Test.find({ userId, status: 'completed' })
+    console.log('Completed tests response:', completedTests)
+
+    const completedTestsCount = await Test.countDocuments({
+      userId,
+      status: 'completed'
+    })
+    console.log('Total number of completed tests:', completedTestsCount)
+    res.status(200).json({
+      message: `Fetching user's completed tests ${completedTests} amd completed tests count ${completedTestsCount}`,
+      completedTests,
+      completedTestsCount
+    })
+  } catch (error) {
+    console.error(
+      `Error fetching completed tests ${completedTests} and completed tests count ${completedTestsCount}`,
+      completedTests,
+      completedTestsCount
+    )
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// Route to get info about a specific completed test for a user
+router.get('/completed-test/:testId', protect, async (req, res) => {
+  try {
+    const { testId } = req.params
+    const userId = req.user.id
+
+    const test = await Test.findOne({
+      _id: testId,
+      user: userId,
+      status: 'completed'
+    })
+
+    if (!test) {
+      return res
+        .status(404)
+        .json({ message: 'Test not found or not completed' })
+    }
+
+    res.status(200).json({ message: `Fetching completed tests ${test}`, test })
+  } catch (error) {
+    console.error('Error fetching completed tests:', error)
+    res.status(500).json({ message: 'Internal server Error' })
+  }
+})
+
+// Route to start test
+router.post('/test/start/:testId', protect, async (req, res) => {
+  try {
+    const { testId } = req.params
+    const userId = req.user.id
+
+    const user = await User.findById(userId)
+    if (!user || !user.courseId) {
+      return res.status(404).json({ message: 'User or course not found.' })
+    }
+    const test = await Test.findOne({ _id: testId, courseId: user.courseId })
+
+    if (!test) {
+      return res
+        .status(403)
+        .json({ message: 'Unauthorized. Test not found for your course.' })
+    }
+
+    // if (test.status === 'completed') {
+    //   return res.status(404).json({ message: 'Test already completed' })
+    // }
+
+    const userTestRecord = await UserTest.findOne({ userId, testId })
+    if (userTestRecord) {
+      return res
+        .status(400)
+        .json({ message: 'Test already started or completed.' })
+    }
+
+    // if (!userTestRecord) {
+    const startTime = new Date()
+    const endTime = new Date(startTime.getTime() + test.duration * 60000)
+
+    const userTestResponse = new UserTest({
+      userId,
+      testId,
+      courseId: user.courseId,
+      startTime,
+      endTime,
+      status: 'ongoing'
+    })
+
+    await userTestResponse.save()
+    // }
+
+    res.status(200).json({
+      message: 'Test started successfully',
+      testId,
+      courseId: user.courseId,
+      startTime,
+      endTime,
+      status: 'ongoing'
+    })
+  } catch (error) {
+    console.error('Error starting test:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// Route to submit test
+router.post('/test/submit/:testId', protect, async (req, res) => {
+  try {
+    const { testId } = req.params
+    const userId = req.user.id
+    const { responses } = req.body
+
+    const test = await Test.findById(testId).populate('courseId')
+    if (!test) {
+      return res.status(404).json({ message: 'Test not found' })
+    }
+
+    const user = await User.findById(userId)
+    if (!user || !user.courses.includes(test.courseId._id)) {
+      return res
+        .status(403)
+        .json({ message: 'Unauthorized: You cannot submit this test.' })
+    }
+
+    const existingSubmission = await Results.findOne({ userId, testId })
+    if (existingSubmission) {
+      return res.status(400).json({ message: 'Test already submitted.' })
+    }
+
+    const savedResponses = await Response.insertMany(
+      responses.map(response => ({
+        userId,
+        testId,
+        questionId: response.questionId,
+        response: response.answer,
+        isCorrect: response.isCorrect
+      }))
+    )
+
+    const score = savedResponses.filter(res => res.isCorrect).length
+
+    const testResult = new Results({
+      userId,
+      testId,
+      courseId: test.courseId._id,
+      score,
+      totalQuestions: test.questions.length,
+      status: 'completed'
+    })
+
+    await testResult.save()
+
+    res.status(200).json({
+      message: 'Test submitted successfully!',
+      score,
+      totalQuestions: test.questions.length
+    })
+  } catch (error) {
+    console.error('Error submitting test:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+/*    let userTest = await UserTest.findOne({ userId, testId })
+    if (!userTest) {
+      return res.status(400).json({ message: 'You have not started this test' })
+    }
+    if (userTest.status === 'completed') {
+      return res
+        .status(400)
+        .json({ message: 'Test has already been submitted' })
+    }
+    const currentTime = new Date()
+    if (currentTime > userTest.endTime) {
+      return res.status(400).json({ message: 'Test time has expired' })
+    }
+    let totalScore = 0
+
+    for (const useResponse of responses) {
+      const { questionId, response } = userResponse
+      const question = await Question.findById(questionId)
+
+      if (!question) continue
+
+      let isCorrect = false
+      let pointsEarned = 0
+
+      if (question.type === 'mcq') {
+        isCorrect =
+          response.trim().toLowerCase() ===
+          question.correctAnswer.trim().toLowerCase()
+        pointsEarned = isCorrect ? question.points : 0
+
+        totalScore += pointsEarned
+
+        await Response.create({
+          userId,
+          testId,
+          questionId,
+          response,
+          isCorrect
+        })
+      }
+
+     userTest.status = 'completed'
+      userTest.score = totalScore
+      userTest.submittedAt = new Date()
+      await userTest.save()
+
+      res
+        .status(200)
+        .json({ message: 'Test submitted successfully.', totalScore })
+    }
+  } catch (error) {
+    console.error('Error submitting test:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})*/
+
+module.exports = router
+
+/*
 // AI Grading Function
-const gradeSubjectiveAnswers = async (testId, subjectiveAnswers) => {
+const gradeSubjectiveAnswers = async (testId, userId, subjectiveAnswers) => {
   try {
     console.log(`Grading subjective answers for test ${testId}...`)
 
@@ -26,7 +511,7 @@ const gradeSubjectiveAnswers = async (testId, subjectiveAnswers) => {
             },
             {
               role: 'user',
-              content: `Question: ${ans.questionText}\nUser Answer: ${ans.answer}\nCorrect Answer: ${ans.correctAnswer}\n\nGrade the answer from 0 to 5, where 5 is completely correct and 0 is wrong. Explain why.`
+              content: `Question: ${ans.text}\nUser Answer: ${ans.answer}\nCorrect Answer: ${ans.correctAnswer}\n\nGrade the answer from 0 to 5, where 5 is completely correct and 0 is wrong. Explain why.`
             }
           ],
           max_tokens: 100
@@ -42,8 +527,6 @@ const gradeSubjectiveAnswers = async (testId, subjectiveAnswers) => {
       const aiResponse = data.choices[0].message.content
       const scoreMatch = aiResponse.match(/Score:\s*(\d+)/)
       const rawScore = scoreMatch ? parseInt(scoreMatch[1]) : 0
-
-      // Assign 1 for scores 3 and above, otherwise 0
       const finalScore = rawScore >= 3 ? 1 : 0
 
       ans.isCorrect = finalScore === 1
@@ -55,8 +538,8 @@ const gradeSubjectiveAnswers = async (testId, subjectiveAnswers) => {
     }
 
     // Update only the subjective answers in the database
-    await Test.updateOne(
-      { _id: testId },
+    await Results.updateOne(
+      { testId, userId },
       {
         $set: {
           'answers.$[elem].isCorrect': true,
@@ -91,6 +574,9 @@ const gradeSubjectiveAnswers = async (testId, subjectiveAnswers) => {
 router.get('/tests/total/:userId', protect, async (req, res) => {
   try {
     const { userId } = req.params
+    const tests = await Test.find({ userId })
+      .populate('courseId', 'title')
+      .select('title createdAt courseId')
     console.log(
       'Fetching total tests and total number of tests for user:',
       userId
@@ -168,7 +654,7 @@ router.get('/completed-test/:testId', protect, async (req, res) => {
     const { testId } = req.params
 
     if (!mongoose.Types.ObjectId.isValid(testId)) {
-      return res.status(400).json({ message: 'Invalid test ID format' })
+      return res.status(500).json({ message: 'Invalid test ID format' })
     }
 
     const test = await Test.findOne({
@@ -195,7 +681,7 @@ router.get('/test/info/:testId', protect, async (req, res) => {
     const userId = req.user.id
 
     if (!mongoose.Types.ObjectId.isValid(testId)) {
-      return res.status(400).json({ message: 'Invalid test ID format' })
+      return res.status(500).json({ message: 'Invalid test ID format' })
     }
 
     const test = await Test.findById(testId)
@@ -207,7 +693,7 @@ router.get('/test/info/:testId', protect, async (req, res) => {
     }
 
     if (test.status === 'completed') {
-      return res.status(400).json({ message: 'Test already completed.' })
+      return res.status(500).json({ message: 'Test already completed.' })
     }
 
     res.status(200).json({ success: true, test })
@@ -228,7 +714,7 @@ router.post('/test/start/:testId', protect, async (req, res) => {
     }
 
     if (test.status === 'completed') {
-      return res.status(400).json({ message: 'Test already completed' })
+      return res.status(500).json({ message: 'Test already completed' })
     }
 
     let userTestRecord = await Test.findOne({ userId, testId })
@@ -277,7 +763,7 @@ router.post('/test/submit/:testId', protect, async (req, res) => {
       return res.status(404).json({ message: 'Test not found' })
     }
     if (test.status === 'completed') {
-      return res.status(400).json({ message: 'Test already submitted' })
+      return res.status(500).json({ message: 'Test already submitted' })
     }
 
     let totalScore = 0
