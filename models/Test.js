@@ -1,37 +1,26 @@
 const mongoose = require('mongoose')
 
+// Define the Answer schema as a subdocument within the Test schema
 const answerSchema = new mongoose.Schema({
   questionId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Question',
     required: true
   },
-  answer: { type: String, default: '' },
-  correctAnswer: { type: String, required: true },
-  isCorrect: { type: Boolean, default: false },
-  score: { type: Number, default: 0 }
+  answer: { type: String, required: true }, // User's answer
+  correctAnswer: { type: String, required: true }, // Correct answer
+  isCorrect: { type: Boolean, required: true }, // Whether the answer is correct
+  score: { type: Number, required: true } // Points for this answer
 })
 
 const testSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  testName: { type: String, required: true },
-  category: { type: String, required: true },
-  status: {
-    type: String,
-    required: true,
-    enum: ['pending', 'ongoing', 'completed', 'active'],
-    default: 'active'
-  },
-  duration: { type: Number, required: true },
-  dueDate: { type: Date, required: true },
-  createdAt: { type: Date, default: Date.now },
-  totalScore: { type: Number, default: 0 },
-  answers: [answerSchema],
-  totalObjectiveScore: { type: Number, default: 0 },
-  totalSubjectiveScore: { type: Number, default: 0 },
-  subjectivePending: { type: Boolean, default: false },
-  totalQuestionsAttempted: { type: Number, default: 0 },
-  questions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }]
+  // testName: { type: String, required: true }, // Test name created by the admin
+  course: { type: String, required: true }, // Test category (e.g., "React.js")
+  answers: [answerSchema], // List of answers for this test
+  totalScore: { type: Number, required: true }, // Total score for the test
+  createdAt: { type: Date, default: Date.now } // Date of test submission
+  // submittedAt: { type: Date, default: Date.now }, // Date of test submission
 })
 
 module.exports = mongoose.model('Test', testSchema)
