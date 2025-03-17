@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Test = require("../models/Test");
 const { protect } = require("./Authentication");
 
+/*
 router.get("/:id", protect, async (req, res) => {
   console.log("Fetched user id:", req.params.id);
 
@@ -44,6 +45,7 @@ router.get("/active/:userId", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+*/
 
 router.get("/user/:id", protect, async (req, res) => {
   console.log("Fetched user id:", req.params.id);

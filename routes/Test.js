@@ -2,24 +2,10 @@ const express = require('express')
 const router = express.Router()
 const Question = require('../models/Question')
 const Test = require('../models/Test')
-const Categories = require('../models/Categories')
+const Courses = require('../models/Courses')
 const { protect, isAdmin } = require('./Authentication')
 
-// Get all courses
-router.get('/courses', async (req, res) => {
-  try {
-    const categories = await Categories.find()
 
-    if (!categories || categories.length === 0) {
-      return res.status(404).json({ message: 'No courses found' })
-    }
-
-    res.json(categories)
-  } catch (error) {
-    console.error('Error fetching courses:', error)
-    res.status(500).json({ message: 'Server error' })
-  }
-})
 
 // Get questions for a specific course
 router.get('/test/questions/:category', protect, async (req, res) => {
@@ -158,6 +144,65 @@ router.get('/results', protect, isAdmin, async (req, res) => {
     res
       .status(500)
       .json({ message: 'Error retrieving scores', error: error.message })
+  }
+})
+
+
+// Get all test results for the user
+router.get('/test/results', protect, async (req, res) => {
+  try {
+    // Fetch all tests that belong to the logged-in user
+    const tests = await Test.find({ userId: req.user.id }).populate(
+      'userId',
+      'username email'
+    )
+
+    res.json(tests)
+  } catch (error) {
+    console.error('Error retrieving user test results:', error)
+    res
+      .status(500)
+      .json({ message: 'Error retrieving test results', error: error.message })
+  }
+})
+
+// Get detailed result of a specific test
+router.get('/test/result/:id', protect, async (req, res) => {
+  try {
+    const test = await Test.findById(req.params.id)
+      .populate('userId', 'username email')
+      .populate({
+        path: 'answers.questionId',
+        select: 'questionText category options correctAnswer'
+      })
+    if (!test)
+      return res
+        .status(404)
+        .json({ message: 'Test not found or unauthorized access.' })
+
+    res.json(test)
+  } catch (error) {
+    console.error('Error retrieving test details:', error)
+    res
+      .status(500)
+      .json({ message: 'Error retrieving test details', error: error.message })
+  }
+})
+
+// Get top 10 test scores for the logged-in user
+router.get('/test/top10', protect, async (req, res) => {
+  try {
+    const topScores = await Test.find({ userId: req.user.id })
+      .sort({ totalScore: -1 })
+      .limit(10)
+      .populate('userId', 'username email')
+
+    res.json(topScores)
+  } catch (error) {
+    console.error('Error retrieving top scores:', error)
+    res
+      .status(500)
+      .json({ message: 'Error retrieving top scores', error: error.message })
   }
 })
 

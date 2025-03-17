@@ -5,7 +5,7 @@ const bodyParser = require('body-parser')
 const cors = require('cors')
 const mongoose = require('mongoose')
 const { router: AuthRoutes } = require('./routes/Authentication')
-// const TestRoutes = require("./routes/Test");
+const TestRoutes = require("./routes/Test");
 const UserDashboardRoutes = require('./routes/UserDashboard')
 const FetchUserRoutes = require('./routes/FetchUser')
 const ForumRoutes = require('./routes/Forum')
@@ -26,7 +26,7 @@ dotenv.config()
 app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || [
-      // "http://localhost:5173",
+      "http://localhost:5173",
       'https://assessify-ten.vercel.app',
       '*'
       // "https://assessify-server.onrender.com"
@@ -57,6 +57,7 @@ mongoose
 app.use('/auth', AuthRoutes)
 // app.use("/test", TestRoutes);
 app.use('/dashboard/user', UserDashboardRoutes)
+app.use('/dashboard/test', TestRoutes)
 app.use('/details', FetchUserRoutes)
 app.use('/forum', ForumRoutes)
 app.use('/assessify', EmailRoute)

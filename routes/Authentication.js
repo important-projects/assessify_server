@@ -1,9 +1,11 @@
 const express = require('express')
+const mongoose = require("mongoose")
 const router = express.Router()
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const User = require('../models/User')
 const Admin = require('../models/Admin')
+const Course = require("../models/Courses")
 // const Course = require('../models/Courses')
 
 const dotenv = require('dotenv')
@@ -11,69 +13,58 @@ dotenv.config()
 
 // User registration
 router.post('/register', async (req, res) => {
-  const { username, email, password, age, userNumber } = req.body
+  const { username, email, password, age, userNumber, courseIds } = req.body;
 
-  if (!username || !email || !password || !age || !userNumber) {
-    console.log('All fields are required')
-    return res.status(400).json({ message: 'All fields are required' })
+  if (!username || !email || !password || !age || !userNumber || !courseIds || !Array.isArray(courseIds)) {
+    console.log('All fields are required, and courseIds must be an array');
+    return res.status(400).json({ message: 'All fields are required, and courseIds must be an array' });
   }
 
   try {
-    const existingUserByEmail = await User.findOne({ email })
-    if (existingUserByEmail) {
-      console.log('Email is already in use')
-      return res.status(400).json({ message: 'Email used' })
+    // Validate course IDs
+    const validCourses = await Course.find({ _id: { $in: courseIds } });
+    if (validCourses.length !== courseIds.length) {
+      console.log('One or more invalid courses selected');
+      return res.status(404).json({ message: 'One or more invalid courses selected' });
     }
 
-    const existingUserByUsername = await User.findOne({ username })
-    if (existingUserByUsername) {
-      console.log('Username is already in use')
-      return res.status(400).json({ message: 'Username used' })
-    }
+    // Check for existing user
+    const existingUserByEmail = await User.findOne({ email });
+    if (existingUserByEmail) return res.status(400).json({ message: 'Email already used' });
 
-    const existingUserByNumber = await User.findOne({ userNumber })
-    if (existingUserByNumber) {
-      console.log('User number is already in use')
-      return res.status(400).json({ message: 'User number used' })
-    }
+    const existingUserByUsername = await User.findOne({ username });
+    if (existingUserByUsername) return res.status(400).json({ message: 'Username already used' });
+
+    const existingUserByNumber = await User.findOne({ userNumber });
+    if (existingUserByNumber) return res.status(400).json({ message: 'User number already used' });
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10)
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new user
+    // Create user with multiple courses
     const user = new User({
       username,
       email,
-      password: hashedPassword, // Use hashed password
+      password: hashedPassword,
       age,
-      userNumber
-    })
-    await user.save()
+      userNumber,
+      courseIds: courseIds.map(id => new mongoose.Types.ObjectId(id))
+    });
+    await user.save();
 
     // Generate JWT token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: '1h'
-    })
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    const userDetails = {
-      id: user._id,
-      username: user.username,
-      email: user.email,
-      age: user.age,
-      userNumber: user.userNumber
-    }
+    // Send response
+    console.log('User registered successfully:', { user, token });
+    res.status(201).json({ message: 'User registered successfully', user, token });
 
-    console.log('User registered successfully:', { user: userDetails, token })
-    res.status(201).json({
-      message: 'User registered successfully.',
-      user: userDetails,
-      token
-    })
   } catch (error) {
-    console.error('Registration error:', error)
-    res.status(500).json({ message: 'Error registering user', error })
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Error registering user', error });
   }
-})
+});
+
 
 // User login
 router.post('/login', async (req, res) => {
