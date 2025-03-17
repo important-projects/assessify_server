@@ -2,64 +2,95 @@ const express = require('express')
 const router = express.Router()
 const { protect } = require('./Authentication')
 const Test = require('../models/Test')
+const Course = require("../models/Courses")
+const User = require("../models/User")
+const mongoose = require("mongoose")
 
-// Get all test results for the user
-router.get('/test/results', protect, async (req, res) => {
+// Get all courses
+router.get('/courses/list', async (req, res) => {
   try {
-    // Fetch all tests that belong to the logged-in user
-    const tests = await Test.find({ userId: req.user.id }).populate(
-      'userId',
-      'username email'
-    )
-
-    res.json(tests)
+    const userCourse = await Course.find()
+    if (!userCourse || userCourse.length === 0) {
+      return res.status(404).json({ message: 'No courses found' })
+    }
+    const courseCount = userCourse.length
+    res.json({ courses: userCourse, count: courseCount })
   } catch (error) {
-    console.error('Error retrieving user test results:', error)
-    res
-      .status(500)
-      .json({ message: 'Error retrieving test results', error: error.message })
+    console.error('Error fetching courses:', error)
+    res.status(500).json({ message: 'Server error' })
   }
 })
 
-// Get detailed result of a specific test
-router.get('/test/result/:id', protect, async (req, res) => {
+// Get all courses for a user
+router.get('/courses', protect, async (req, res) => {
   try {
-    const test = await Test.findById(req.params.id)
-      .populate('userId', 'username email')
-      .populate({
-        path: 'answers.questionId',
-        select: 'questionText category options correctAnswer'
-      })
-    if (!test)
-      return res
-        .status(404)
-        .json({ message: 'Test not found or unauthorized access.' })
+    const userId = req.user?.id;
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
 
-    res.json(test)
+    // Fetch user with populated course details
+    const user = await User.findById(userId).populate('courseIds', 'name description _id');
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.json({
+      count: user.courseIds.length,
+      courses: user.courseIds
+    });
+
   } catch (error) {
-    console.error('Error retrieving test details:', error)
-    res
-      .status(500)
-      .json({ message: 'Error retrieving test details', error: error.message })
+    console.error('Error fetching courses:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+
+
+router.get('/courses/:courseId', protect, async (req, res) => {
+  try {
+    const { courseId } = req.params
+    const userId = req.user.id
+
+    const singleCourse = await Course.findById(courseId)
+
+    if (!singleCourse) {
+      return res.status(404).json({ message: "Course not found" })
+    }
+
+    const userSingleCourse = await Course.findOne({ userId, courseId })
+
+    if (!userSingleCourse) {
+      return res.status(404).json({ message: "You are not registered for this course" })
+    }
+    res.status(200).json({
+      message: `User course found ${userSingleCourse}`, userSingleCourse
+    })
+  } catch (error) {
+    console.error('Error fetching course:', error)
+    res.status(500).json({ message: 'Server error' })
+
   }
 })
 
-// Get top 10 test scores for the logged-in user
-router.get('/test/top10', protect, async (req, res) => {
+// Route to get all new tests for a user
+router.get("/new", protect, async (req, res) => {
   try {
-    const topScores = await Test.find({ userId: req.user.id })
-      .sort({ totalScore: -1 })
-      .limit(10)
-      .populate('userId', 'username email')
-
-    res.json(topScores)
+    const { userId } = req.params
+    const newTests = await Test.find({ status: "new", userId })
+    if (!newTests) {
+      return res.status(404).json({ message: "No new tests" })
+    }
+    res.status(200).json({ message: "New tests: ", newTests })
   } catch (error) {
-    console.error('Error retrieving top scores:', error)
-    res
-      .status(500)
-      .json({ message: 'Error retrieving top scores', error: error.message })
+    console.error('Error fetching new tests:', error)
+    res.status(500).json({ message: 'Server error' })
   }
 })
+module.exports = router
 
 /*const express = require('express')
 const router = express.Router()

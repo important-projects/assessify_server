@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema(
     userNumber: { type: Number, required: true, unique: true },
     // courseEnrolled: { type: String },
     avatarUrl: { type: String },
+    courseIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Courses' }]
     // points: { type: Number, default: 0 },
     // badges: { type: [String], default: [] },
     // streak: { type: Number, default: 0 },
