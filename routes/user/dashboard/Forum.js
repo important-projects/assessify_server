@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const Post = require("../models/Post")
-const Comment = require("../models/Comment")
-const { protect } = require("./Authentication")
+const Post = require("../../../models/Post")
+const Comment = require("../../../models/Comment")
+const { protect } = require("../authentication/Authentication")
 
 
 // Create new post

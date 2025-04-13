@@ -7,7 +7,12 @@ const courseSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    tests: [
+      {
+        type: mongoose.Schema.Types.ObjectId, ref: "User"
+      }
+    ],
+    registeredUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   },
   {
     timestamps: true
@@ -17,4 +22,4 @@ const courseSchema = new mongoose.Schema(
 courseSchema.set('toJSON', { virtuals: true, versionKey: false })
 courseSchema.set('toObject', { virtuals: true, versionKey: false })
 
-module.exports = mongoose.model('Courses', courseSchema)
+module.exports = mongoose.model('Course', courseSchema)

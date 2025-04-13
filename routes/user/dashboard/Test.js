@@ -1,9 +1,9 @@
 const express = require('express')
 const router = express.Router()
-const Question = require('../models/Question')
-const Test = require('../models/Test')
-const Courses = require('../models/Courses')
-const { protect, isAdmin } = require('./Authentication')
+const Question = require('../../../models/Question')
+const Test = require('../../../models/Test')
+const Courses = require('../../../models/Courses')
+const { protect, isAdmin } = require('../authentication/Authentication')
 
 
 

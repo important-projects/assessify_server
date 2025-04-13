@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const User = require("../models/User");
-const Test = require("../models/Test");
-const { protect } = require("./Authentication");
+const User = require("../../../models/User");
+const Test = require("../../../models/Test");
+const { protect } = require("../authentication/Authentication");
 
 /*
 router.get("/:id", protect, async (req, res) => {
@@ -51,7 +51,10 @@ router.get("/user/:id", protect, async (req, res) => {
   console.log("Fetched user id:", req.params.id);
 
   try {
-    const user = await User.findById(req.params.id);
+    const user = await User.findById(req.params.id).select('username email age userNumber registeredCourses avatarUrl');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
     console.log("User found: ", user);
     res.json(user);
   } catch (error) {

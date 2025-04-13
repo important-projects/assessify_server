@@ -20,12 +20,11 @@ router.post('/contact', async (req, res) => {
     })
 
     const mailOptions = {
-      from: `"${name}" <${email}>`, // Shows the sender’s email
-      to: process.env.CONTACT_RECEIVER, // Admin email
+      from: `${name} -- ${email}`, // Shows the sender’s email
+      to: process.env.EMAIL_USER, // Admin email
       subject: `New Contact Form Submission from ${name}`,
       text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
-      html: `
-        <h2>New Contact Message</h2>
+      html: `<h2>New Contact Message</h2>
         <p><strong>Name:</strong> ${name}</p>
         <p><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
         <p><strong>Message:</strong></p>
