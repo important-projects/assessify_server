@@ -151,7 +151,8 @@ app.get('/auth/google/callback', async (req, res) => {
 
     // res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
     // res.redirect('http://localhost:5173/auth/google/callback');
-    res.redirect(`http://localhost:5173/auth/google/callback?token=${token}&user=${encodedUser}`)
+    // res.redirect(`http://localhost:5173/auth/google/callback?token=${token}&user=${encodedUser}`)
+    res.redirect(`http://assessify-ten.vercel.app/auth/google/callback?token=${token}&user=${encodedUser}`)
   }
   catch (error) {
     console.error('Error during Google authentication:', error.message);
