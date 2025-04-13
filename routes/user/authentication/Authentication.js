@@ -3,26 +3,56 @@ const mongoose = require("mongoose")
 const router = express.Router()
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
-const User = require('../models/User')
-const Admin = require('../models/Admin')
-const Course = require("../models/Courses")
+const User = require('../../../models/User')
+const Admin = require('../../../models/Admin')
+const Course = require("../../../models/Courses")
 // const Course = require('../models/Courses')
 
 const dotenv = require('dotenv')
 dotenv.config()
 
+// Middleware to authenticate user JWT token
+const protect = async (req, res, next) => {
+  const token = req.header('Authorization')?.split(' ')[1]
+
+  if (!token) {
+    console.log('Access banned due to missing token')
+    return res.status(401).json({ message: 'Access banned.' })
+  }
+  if (!req.headers.authorization) {
+    console.log('No token provided')
+    return res
+      .status(401)
+      .json({ message: 'Access denied. No token provided.' })
+  }
+  console.log('Authorization Header:', req.headers.authorization)
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    req.user = decoded
+    console.log('Decoded user:', req.user)
+    next()
+  } catch (error) {
+    console.error('JWT verification failed:', error)
+    return res.status(403).json({ message: 'Invalid Token!.' })
+  }
+}
+
 // User registration
 router.post('/register', async (req, res) => {
-  const { username, email, password, age, userNumber, courseIds } = req.body;
+  const { username, email, password, courses } = req.body;
 
-  if (!username || !email || !password || !age || !userNumber || !courseIds || !Array.isArray(courseIds)) {
-    console.log('All fields are required, and courseIds must be an array');
-    return res.status(400).json({ message: 'All fields are required, and courseIds must be an array' });
+  if (!username || !email || !password || !courses || !Array.isArray(courses)) {
+    console.log('All fields are required, and courses must be an array');
+    return res.status(400).json({ message: 'All fields are required, and courses must be an array' });
   }
 
   try {
-    // Validate course IDs
+    const userNumber = Math.floor(100000 + Math.random() * 900000)
+    // Validate courses: Check if all provided courses exist
+    const courseIds = courses.map(course => course._id);
     const validCourses = await Course.find({ _id: { $in: courseIds } });
+
     if (validCourses.length !== courseIds.length) {
       console.log('One or more invalid courses selected');
       return res.status(404).json({ message: 'One or more invalid courses selected' });
@@ -41,15 +71,20 @@ router.post('/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user with multiple courses
+
+    // Create user with full course details
     const user = new User({
       username,
       email,
       password: hashedPassword,
-      age,
-      userNumber,
-      courseIds: courseIds.map(id => new mongoose.Types.ObjectId(id))
+      userNumber:userNumber,
+      registeredCourses: validCourses.map(course => ({
+        _id: course._id,
+        name: course.name,
+        description: course.description,
+      })),
     });
+
     await user.save();
 
     // Generate JWT token
@@ -65,6 +100,55 @@ router.post('/register', async (req, res) => {
   }
 });
 
+
+router.post('/courses/register', protect, async (req, res) => {
+  const { courseIds } = req.body
+  const userId = req.user.id
+
+  if (!courseIds || !Array.isArray(courseIds)) {
+    console.log('Invalid course IDs')
+    return res.status(400).json({ message: 'Course IDs must be an array' })
+  }
+
+  try {
+    // Validate courses
+    const validCourses = await Course.find({ _id: { $in: courseIds } });
+    if (validCourses.length !== courseIds.length) {
+      return res.status(404).json({ message: 'One or more courses not found' });
+    }
+
+    // Update user’s registeredCourses
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Add new courses, avoiding duplicates
+    const newCourses = validCourses.map((course) => ({
+      _id: course._id,
+      name: course.name,
+      description: course.description,
+    }));
+    user.registeredCourses = [
+      ...user.registeredCourses.filter(
+        (c) => !newCourses.some((nc) => nc._id.toString() === c._id.toString())
+      ),
+      ...newCourses,
+    ];
+    await user.save();
+
+    // Update course’s registeredUsers
+    await Course.updateMany(
+      { _id: { $in: courseIds } },
+      { $addToSet: { registeredUsers: userId } }
+    );
+
+    res.status(200).json({ message: 'Courses registered successfully', courses: user.registeredCourses });
+  } catch (error) {
+    console.error('Error registering courses:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // User login
 router.post('/login', async (req, res) => {
@@ -97,7 +181,8 @@ router.post('/login', async (req, res) => {
       username: user.username,
       email: user.email,
       age: user.age,
-      userNumber: user.userNumber
+      userNumber: user.userNumber,
+      registeredCourses: user.registeredCourses
     }
 
     console.log('Login successful:', { user: userDetails, token })
@@ -213,33 +298,6 @@ router.post('/admin/login', async (req, res) => {
     return res.status(500).json({ message: 'Login error.', error })
   }
 })
-
-// Middleware to authenticate user JWT token
-const protect = async (req, res, next) => {
-  const token = req.header('Authorization')?.split(' ')[1]
-
-  if (!token) {
-    console.log('Access banned due to missing token')
-    return res.status(401).json({ message: 'Access banned.' })
-  }
-  if (!req.headers.authorization) {
-    console.log('No token provided')
-    return res
-      .status(401)
-      .json({ message: 'Access denied. No token provided.' })
-  }
-  console.log('Authorization Header:', req.headers.authorization)
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = decoded
-    console.log('Decoded user:', req.user)
-    next()
-  } catch (error) {
-    console.error('JWT verification failed:', error)
-    return res.status(403).json({ message: 'Invalid Token!.' })
-  }
-}
 
 // Middleware to check if the user is an admin
 const isAdmin = async (req, res, next) => {

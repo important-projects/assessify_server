@@ -1,7 +1,7 @@
 const express = require('express')
 // const Question = require("../models/Question");
-const { protect, isAdmin } = require('./Authentication')
-const Test = require('../models/Test')
+const { protect, isAdmin } = require('../user/authentication/Authentication')
+const Test = require('../../models/Test')
 const router = express.Router()
 const multer = require('multer')
 // const fs = require("fs");

@@ -1,10 +1,24 @@
 const express = require('express')
 const router = express.Router()
-const { protect } = require('./Authentication')
-const Test = require('../models/Test')
-const Course = require("../models/Courses")
-const User = require("../models/User")
+const { protect } = require('../authentication/Authentication')
+const Test = require('../../../models/Test')
+const Course = require("../../../models/Courses")
+const User = require("../../../models/User")
 const mongoose = require("mongoose")
+
+// Update user profile
+router.put('/profile', protect, async (req, res) => {
+  const { age } = req.body;
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (age) user.age = age;
+    await user.save();
+    res.json({ message: 'Profile updated', user });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // Get all courses
 router.get('/courses/list', async (req, res) => {
@@ -21,7 +35,7 @@ router.get('/courses/list', async (req, res) => {
   }
 })
 
-// Get all courses for a user
+// Get all enrolled courses for a user
 router.get('/courses', protect, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -29,67 +43,117 @@ router.get('/courses', protect, async (req, res) => {
       return res.status(400).json({ message: 'Invalid user ID' });
     }
 
-    // Fetch user with populated course details
-    const user = await User.findById(userId).populate('courseIds', 'name description _id');
-
+    // Ensure user exists
+    const user = await User.findById(userId).populate('registeredCourses');
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
 
+    // Fetch courses where the user is registered
+    const enrolledCourses = await Course.find({ registeredUsers: userId }).select('name description _id');
+
     return res.json({
-      count: user.courseIds.length,
-      courses: user.courseIds
+      count: user.registeredCourses.length,
+      courses: user.registeredCourses
     });
 
   } catch (error) {
-    console.error('Error fetching courses:', error);
+    console.error('Error fetching enrolled courses:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 
-
-
+// Route to get the course for a user
 router.get('/courses/:courseId', protect, async (req, res) => {
   try {
-    const { courseId } = req.params
-    const userId = req.user.id
+    const { courseId } = req.params;
+    const userId = req.user.id;
 
-    const singleCourse = await Course.findById(courseId)
+    console.log('Requested courseId:', courseId);
+    console.log('Authenticated userId:', userId);
 
-    if (!singleCourse) {
-      return res.status(404).json({ message: "Course not found" })
+    // Convert courseId to ObjectId
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ message: "Invalid course ID" });
     }
 
-    const userSingleCourse = await Course.findOne({ userId, courseId })
+    // Check if the user is registered for the course
+    const user = await User.findById(userId).populate('registeredCourses');
 
-    if (!userSingleCourse) {
-      return res.status(404).json({ message: "You are not registered for this course" })
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
-    res.status(200).json({
-      message: `User course found ${userSingleCourse}`, userSingleCourse
-    })
+
+    const course = user.registeredCourses.find(
+      (course) => course._id.toString() === courseId
+    );
+
+    if (!course) {
+      return res.status(403).json({ message: "You are not registered for this course" });
+    }
+
+    res.status(200).json({ message: "User course found", course });
+    console.log("User course found: ", course);
   } catch (error) {
-    console.error('Error fetching course:', error)
-    res.status(500).json({ message: 'Server error' })
-
+    console.error('Error fetching course:', error.message, error);
+    res.status(500).json({ message: 'Server error' });
   }
-})
+});
+
+// Route to get tests for a particular course associated to a particular user
+router.get('/courses/:courseId/tests', protect, async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user.id;
+
+    // Check if the course exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    // Check if the user is registered for the course
+    const user = await User.findOne({
+      _id: userId,
+      registeredCourses: courseId
+    });
+
+    if (!user) {
+      return res.status(403).json({ message: "You are not registered for this course" });
+    }
+
+    // Fetch tests linked to the course
+    const tests = await Test.find({ course: courseId }).populate('questions');
+
+    if (!tests || tests.length === 0) {
+      return res.status(404).json({ message: "No tests available for this course" });
+    }
+
+    res.status(200).json({ message: "Course tests found", tests });
+    console.log({ message: "Course tests found", tests });
+
+  } catch (error) {
+    console.error('Error fetching tests:', error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 // Route to get all new tests for a user
-router.get("/new", protect, async (req, res) => {
-  try {
-    const { userId } = req.params
-    const newTests = await Test.find({ status: "new", userId })
-    if (!newTests) {
-      return res.status(404).json({ message: "No new tests" })
-    }
-    res.status(200).json({ message: "New tests: ", newTests })
-  } catch (error) {
-    console.error('Error fetching new tests:', error)
-    res.status(500).json({ message: 'Server error' })
-  }
-})
+// router.get("/new", protect, async (req, res) => {
+//   try {
+//     const { userId } = req.params
+//     const newTests = await Test.find({ status: "new", userId })
+//     if (!newTests) {
+//       return res.status(404).json({ message: "No new tests" })
+//     }
+//     res.status(200).json({ message: "New tests: ", newTests })
+//   } catch (error) {
+//     console.error('Error fetching new tests:', error)
+//     res.status(500).json({ message: 'Server error' })
+//   }
+// })
 module.exports = router
 
 /*const express = require('express')
