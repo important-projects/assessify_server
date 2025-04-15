@@ -37,6 +37,7 @@ router.get('/courses/list', async (req, res) => {
 
 // Get all enrolled courses for a user
 router.get('/courses', protect, async (req, res) => {
+  // if (req.user?.premium) {
   try {
     const userId = req.user?.id;
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
@@ -61,6 +62,11 @@ router.get('/courses', protect, async (req, res) => {
     console.error('Error fetching enrolled courses:', error);
     res.status(500).json({ message: 'Server error' });
   }
+  // }
+  // else {
+  //   res.status(403).json({ message: 'You are not a premium user' });
+  //   console.log("You are not a premium user");
+  // }
 });
 
 

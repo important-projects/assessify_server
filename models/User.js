@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema(
     userNumber: { type: Number, required: true, unique: true },
     avatarUrl: { type: String },
     authProvider: { type: String, enum: ['manual', 'google'], default: 'manual' },
+    premium: { type: Boolean, default: false },
     registeredCourses: [{ _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' }, name: String, description: String }],
     testSubmissions: [
       {

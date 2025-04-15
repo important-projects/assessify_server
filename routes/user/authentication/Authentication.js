@@ -1,12 +1,11 @@
 const express = require('express')
-const mongoose = require("mongoose")
+const { google } = require('googleapis')
 const router = express.Router()
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const User = require('../../../models/User')
 const Admin = require('../../../models/Admin')
 const Course = require("../../../models/Courses")
-// const Course = require('../models/Courses')
 
 const dotenv = require('dotenv')
 dotenv.config()
@@ -77,7 +76,7 @@ router.post('/register', async (req, res) => {
       username,
       email,
       password: hashedPassword,
-      userNumber:userNumber,
+      userNumber: userNumber,
       registeredCourses: validCourses.map(course => ({
         _id: course._id,
         name: course.name,
@@ -100,6 +99,87 @@ router.post('/register', async (req, res) => {
   }
 });
 
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_OAUTH_CLIENT,
+  process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+  process.env.GOOGLE_OAUTH_REDIRECT_URL
+)
+
+router.get('/google', (req, res) => {
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['profile', 'email']
+  })
+  res.redirect(url)
+})
+
+router.get('/google/callback', async (req, res) => {
+  const code = req.query.code
+
+  try {
+    const { tokens } = await oauth2Client.getToken(code)
+    oauth2Client.setCredentials(tokens)
+
+    const oauth2 = google.oauth2({
+      auth: oauth2Client,
+      version: 'v2',
+    })
+
+    const { data } = await oauth2.userinfo.get()
+
+    const googleEmail = data.email
+    const googleName = data.name || data.email.split('@')[0]
+    const avatarUrl = data.picture
+
+    let user = await User.findOne({ email: googleEmail })
+
+    if (!user) {
+      let userNumber
+      let isUnique = false
+      while (!isUnique) {
+        userNumber = Math.floor(100000 + Math.random() * 900000)
+        const existingUser = await User.findOne({ userNumber })
+        if (!existingUser) {
+          isUnique = true
+        }
+      }
+
+      user = new User({
+        username: googleName,
+        email: googleEmail,
+        password: await bcrypt.hash(Math.random().toString(36).slice(2), 10),
+        userNumber,
+        registeredCourses: [],
+        avatarUrl,
+        authProvider: 'google'
+      })
+      await user.save()
+    } else {
+      user.username = user.username || googleName
+      user.avatarUrl = user.avatarUrl || avatarUrl
+      user.authProvider = user.authProvider || 'google'
+      await user.save()
+    }
+
+    const tokenPayload = {
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      registeredCourses: user.registeredCourses
+    }
+
+    console.log(data)
+    console.log(tokenPayload)
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '1h' })
+    const encodedUser = encodeURIComponent(JSON.stringify(tokenPayload))
+
+    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/google/callback?token=${token}&user=${encodedUser}`)
+  } catch (error) {
+    console.error('Error during Google auhentication:', error.message)
+    res.status(500).json({ error: 'Authentication failed', details: error.message });
+  }
+})
 
 router.post('/courses/register', protect, async (req, res) => {
   const { courseIds } = req.body
@@ -197,135 +277,5 @@ router.post('/login', async (req, res) => {
   }
 })
 
-// User registration
-router.post('/admin/register', async (req, res) => {
-  const { email, password, adminNumber } = req.body
 
-  if (!email || !password || !adminNumber) {
-    console.log('All fields are required')
-    return res.status(400).json({ message: 'All fields are required' })
-  }
-
-  try {
-    const existingUserByEmail = await Admin.findOne({ email })
-    if (existingUserByEmail) {
-      console.log('Email is already in use')
-      return res.status(400).json({ message: 'Email used' })
-    }
-
-    const existingUserByNumber = await Admin.findOne({ adminNumber })
-    if (existingUserByNumber) {
-      console.log('User number is already in use')
-      return res.status(400).json({ message: 'User number used' })
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10)
-
-    // Create new user
-    const user = new Admin({
-      email,
-      password: hashedPassword, // Use hashed password
-      adminNumber
-    })
-    await user.save()
-
-    // Generate JWT token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: '1h'
-    })
-
-    const userDetails = {
-      id: user._id,
-      email: user.email,
-      adminNumber: user.adminNumber
-    }
-
-    console.log('Admin registered successfully:', { user: userDetails, token })
-    res.status(201).json({
-      message: 'User registered successfully.',
-      user: userDetails,
-      token
-    })
-  } catch (error) {
-    console.error('Registration error:', error)
-    res.status(500).json({ message: 'Error registering user', error })
-  }
-})
-
-// User login
-router.post('/admin/login', async (req, res) => {
-  const { adminNumber, password } = req.body
-
-  if (!adminNumber || !password) {
-    console.log('Admin number and password are required')
-    return res
-      .status(400)
-      .json({ message: 'Admin number and password are required' })
-  }
-
-  try {
-    const user = await Admin.findOne({ adminNumber }).select('+password')
-    if (!user) {
-      console.log('Invalid admin number')
-      return res.status(400).json({ message: 'Invalid admin number' })
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password)
-    if (!isMatch) {
-      console.log('Invalid password')
-      return res.status(400).json({ message: 'Invalid password' })
-    }
-
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '1h'
-    })
-
-    const userDetails = {
-      id: user._id,
-      email: user.email,
-      userNumber: user.userNumber
-    }
-
-    console.log('Login successful:', { user: userDetails, token })
-    return res.status(200).json({
-      message: 'Login successful.',
-      user: userDetails,
-      token
-    })
-  } catch (error) {
-    console.error('Login error:', error)
-    return res.status(500).json({ message: 'Login error.', error })
-  }
-})
-
-// Middleware to check if the user is an admin
-const isAdmin = async (req, res, next) => {
-  try {
-    console.log('Checking admin access for user ID:', req.user?.id)
-
-    if (!req.user || !req.user.id) {
-      console.log('Unauthorized access attempt - No admin information found')
-      return res
-        .status(401)
-        .json({ message: 'Unauthorized. Admin information is missing.' })
-    }
-
-    const admin = await Admin.findById(req.user.id)
-
-    if (!admin) {
-      console.log('Admin not found - Access forbidden')
-      return res.status(403).json({ message: 'Access forbidden. Admins only.' })
-    }
-
-    console.log('Admin verified:', admin)
-    next()
-  } catch (error) {
-    console.error('Error checking admin status:', error.message)
-    return res
-      .status(500)
-      .json({ message: 'Error checking admin status', error: error.message })
-  }
-}
-
-module.exports = { router, protect, isAdmin }
+module.exports = { router, protect }
