@@ -3,8 +3,8 @@ const router = express.Router()
 const Question = require('../../../models/Question')
 const Test = require('../../../models/Test')
 const Courses = require('../../../models/Courses')
-const { protect, isAdmin } = require('../authentication/Authentication')
-
+const { protect } = require('../authentication/Authentication')
+const { isAdmin } = require("../../admin/authentication/Authentication")
 
 
 // Get questions for a specific course

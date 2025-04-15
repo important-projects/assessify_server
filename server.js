@@ -1,21 +1,21 @@
 const express = require('express')
 const http = require('http')
 const app = express()
-const bodyParser = require('body-parser')
 const cors = require('cors')
-const jwt = require("jsonwebtoken")
 const mongoose = require('mongoose')
 const { router: AuthRoutes } = require('./routes/user/authentication/Authentication')
 const TestRoutes = require("./routes/user/dashboard/Test");
 const UserDashboardRoutes = require('./routes/user/dashboard/UserDashboard')
 const FetchUserRoutes = require('./routes/user/dashboard/FetchUser')
+const FetchAdminUserRoutes = require('./routes/admin/dashboard/FetchAdmin')
 const ForumRoutes = require('./routes/user/dashboard/Forum')
 const EmailRoute = require('./routes/mailer/Mailer')
-const AdminRoute = require('./routes/admin/Admin')
-const User = require('./models/User')
+const { router: AdminRoute } = require('./routes/admin/authentication/Authentication')
+// const UploadRoute = require('./routes/admin/Upload')
+// const CreatePlan = require('./routes/payments/script')
+// const Payment = require('./routes/payments/payment')
+
 const dotenv = require('dotenv')
-const bcrypt = require('bcryptjs')
-const { google } = require("googleapis")
 
 const PORT = process.env.PORT || 5000
 const server = http.createServer(app)
@@ -31,7 +31,8 @@ app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || [
       "http://localhost:5173",
-      'https://assessify-ten.vercel.app',
+      "http://localhost:5174",
+      // 'https://assessify-ten.vercel.app',
       '*'
       // "https://assessify-server.onrender.com"
     ],
@@ -63,10 +64,15 @@ app.use('/auth', AuthRoutes)
 app.use('/dashboard/user', UserDashboardRoutes)
 app.use('/dashboard/test', TestRoutes)
 app.use('/details', FetchUserRoutes)
+app.use('/admin/details', FetchAdminUserRoutes)
 app.use('/forum', ForumRoutes)
 app.use('/assessify', EmailRoute)
 app.use('/admin', AdminRoute)
+// app.use('/paystack', CreatePlan)
+// app.use('/assessify', Payment)
+// app.use('/admin', UploadRoute)
 
+/*
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_OAUTH_CLIENT,
   process.env.GOOGLE_OAUTH_CLIENT_SECRET,
@@ -152,14 +158,14 @@ app.get('/auth/google/callback', async (req, res) => {
     // res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
     // res.redirect('http://localhost:5173/auth/google/callback');
     // res.redirect(`http://localhost:5173/auth/google/callback?token=${token}&user=${encodedUser}`)
-    res.redirect(`http://assessify-ten.vercel.app/auth/google/callback?token=${token}&user=${encodedUser}`)
+    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/google/callback?token=${token}&user=${encodedUser}`)
   }
   catch (error) {
     console.error('Error during Google authentication:', error.message);
     res.status(500).json({ error: 'Authentication failed', details: error.message });
   }
 })
-
+*/
 app.get('/current-datetime', (req, res) => {
   try {
     const utcDate = new Date()

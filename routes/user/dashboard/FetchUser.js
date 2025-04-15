@@ -58,7 +58,7 @@ router.get("/user/:id", protect, async (req, res) => {
     console.log("User found: ", user);
     res.json(user);
   } catch (error) {
-    console.error("Error fetchin user: ", error);
+    console.error("Error fetching user: ", error);
     res.status(500).json({
       message: "Error fetcing user:",
       error,
