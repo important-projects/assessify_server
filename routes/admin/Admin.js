@@ -1,10 +1,12 @@
 const express = require('express')
 // const Question = require("../models/Question");
-const { protect, isAdmin } = require('../user/authentication/Authentication')
+const { protect } = require('../user/authentication/Authentication')
+const { isAdmin } = require('./authentication/Authentication')
 const Test = require('../../models/Test')
 const router = express.Router()
 const multer = require('multer')
-// const fs = require("fs");
+const fs = require("fs");
+const pdfparse = require('pdf-parse')
 // const path = require("path");
 
 // Configure Multer to handle file uploads (for single file)
@@ -121,7 +123,7 @@ router.post(
   isAdmin,
   upload.single('file'),
   async (req, res) => {
-    const { testName, category, questions } = req.body
+    const { testName, category, course } = req.body
     const file = req.file
     const adminId = req.user.id
 
@@ -130,38 +132,83 @@ router.post(
       !file ||
       (file.mimetype !== 'application/pdf' &&
         file.mimetype !== 'application/msword' &&
-        file.mimetype !==
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        file.mimetype !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
     ) {
       return res.status(400).json({ message: 'Invalid file type' })
     }
 
-    // validate file size
-    if (file.size > 10485760) {
-      // 10 MB limit
+    if (file.size > 10 * 1024 * 1024) {
       return res.status(400).json({ message: 'File size exceeds limit' })
     }
 
     try {
+      const buffer = fs.readFileSync(file.path)
+      const pdfData = await pdfParse(buffer)
+
+      const lines = pdfData.text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+
+      const parsedQuestions = []
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].startsWith('Question:')) {
+          const questionText = lines[i].replace('Question:', '').trim()
+          const options = []
+
+          if (lines[i + 1]?.startsWith('Options:')) {
+            for (
+              let j = i + 2;
+              j < lines.length && /^[a-dA-D]\./.test(lines[j]);
+              j++
+            ) {
+              options.push(lines[j].trim())
+            }
+          }
+
+          const questionType = options.length > 0 ? 'objective' : 'theory'
+
+          parsedQuestions.push({
+            course,
+            questionText,
+            questionType,
+            options
+          })
+        }
+      }
+
+      if (parsedQuestions.length === 0) {
+        return res.status(400).json({ message: 'No valid questions found in file.' })
+      }
+
+      // Save questions and get their IDs
+      const savedQuestions = await Question.insertMany(parsedQuestions)
+
+      // Create the test
       const newTest = new Test({
-        testName,
-        category,
-        filePath: file.path,
-        questions: JSON.parse(questions),
-        createdBy: adminId
+        userId: adminId,
+        course,
+        questions: savedQuestions.map(q => q._id),
+        answers: [], // You can populate this later
+        totalScore: savedQuestions.length,
+        status: 'new'
       })
 
       await newTest.save()
-      res
-        .status(201)
-        .json({ message: 'Test created successfully', testId: newTest._id })
+
+      res.status(201).json({
+        message: 'Test created successfully',
+        testId: newTest._id
+      })
     } catch (error) {
       console.error('Error creating test:', error)
-      res
-        .status(500)
-        .json({ message: 'Error creating test', error: error.message })
+      res.status(500).json({
+        message: 'Error creating test',
+        error: error.message
+      })
     }
   }
-)
+) 
+
 
 module.exports = router

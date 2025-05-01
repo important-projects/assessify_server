@@ -10,12 +10,13 @@ const FetchUserRoutes = require('./routes/user/dashboard/FetchUser')
 const FetchAdminUserRoutes = require('./routes/admin/dashboard/FetchAdmin')
 const ForumRoutes = require('./routes/user/dashboard/Forum')
 const EmailRoute = require('./routes/mailer/Mailer')
+const originAdmin = require('./routes/admin/Admin')
 const { router: AdminRoute } = require('./routes/admin/authentication/Authentication')
 // const UploadRoute = require('./routes/admin/Upload')
 // const CreatePlan = require('./routes/payments/script')
 // const Payment = require('./routes/payments/payment')
 
-const dotenv = require('dotenv')
+require('dotenv').config()
 
 const PORT = process.env.PORT || 5000
 const server = http.createServer(app)
@@ -26,7 +27,6 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
 // cors config
-dotenv.config()
 app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || [
@@ -41,10 +41,9 @@ app.use(
     credentials: true
   })
 )
-app.use(express.json())
 
 mongoose
-  .connect(process.env.DB_URI, {
+  .connect(process.env.DEV_DB_URI, {
     serverSelectionTimeoutMS: 100000
   })
   .then(() => {
@@ -68,6 +67,7 @@ app.use('/admin/details', FetchAdminUserRoutes)
 app.use('/forum', ForumRoutes)
 app.use('/assessify', EmailRoute)
 app.use('/admin', AdminRoute)
+app.use('/Admin', originAdmin)
 // app.use('/paystack', CreatePlan)
 // app.use('/assessify', Payment)
 // app.use('/admin', UploadRoute)

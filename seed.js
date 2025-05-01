@@ -1,8 +1,7 @@
 const mongoose = require('mongoose')
 const Question = require('./models/Question')
-const dotenv = require('dotenv')
+require('dotenv').config()
 
-dotenv.config()
 mongoose
   .connect(process.env.DB_URI)
   .then(() => console.log('MongoDB connected'))

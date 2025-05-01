@@ -8,7 +8,8 @@ const { isAdmin } = require("../../admin/authentication/Authentication")
 
 
 // Get questions for a specific course
-router.get('/test/questions/:category', protect, async (req, res) => {
+// Edit: route was previously '/test/questions/:category', removed /test
+router.get('/questions/:category', protect, async (req, res) => {
   const category = req.params.category
   console.log('Category received:', category)
   try {
@@ -103,7 +104,9 @@ router.get('/submitted/:id', protect, isAdmin, async (req, res) => {
       .populate('userId', 'username email')
       .populate({
         path: 'answers.questionId',
-        select: 'questionText category options correctAnswer' // Include fields relevant to display
+        // Edit: select was initially 'questionText category options correctAnswer',
+        // removed 'category' because there is no such field in the Question schema defintion.
+        select: 'questionText options correctAnswer' // Include fields relevant to display
       })
 
     if (!test) return res.status(404).json({ message: 'Test not found' })
@@ -117,19 +120,20 @@ router.get('/submitted/:id', protect, isAdmin, async (req, res) => {
 })
 
 // Get all tests submitted by a user (Admin Access Only)
-router.get('/submitted', protect, isAdmin, async (req, res) => {
-  try {
-    const tests = await Test.find().populate('userId', 'username email')
-    console.log('Retrieved tests:', tests)
+// Edit: this route has already been created, that's why I commented it.
+// router.get('/submitted', protect, isAdmin, async (req, res) => {
+//   try {
+//     const tests = await Test.find().populate('userId', 'username email')
+//     console.log('Retrieved tests:', tests)
 
-    res.json(tests)
-  } catch (error) {
-    console.error('Error retrieving tests:', error)
-    res
-      .status(500)
-      .json({ message: 'Error retrieving tests', error: error.message })
-  }
-})
+//     res.json(tests)
+//   } catch (error) {
+//     console.error('Error retrieving tests:', error)
+//     res
+//       .status(500)
+//       .json({ message: 'Error retrieving tests', error: error.message })
+//   }
+// })
 
 // Get all test scores (Admin Access Only)
 router.get('/results', protect, isAdmin, async (req, res) => {
@@ -173,7 +177,9 @@ router.get('/test/result/:id', protect, async (req, res) => {
       .populate('userId', 'username email')
       .populate({
         path: 'answers.questionId',
-        select: 'questionText category options correctAnswer'
+        // Edit: select was initially 'questionText category options correctAnswer',
+        // removed 'category' because there is no such field in the Question schema defintion.
+        select: 'questionText options correctAnswer'
       })
     if (!test)
       return res

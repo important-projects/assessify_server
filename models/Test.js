@@ -1,6 +1,7 @@
 const mongoose = require('mongoose')
 const testSchema = new mongoose.Schema({
-  // userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  // Edit: userId was initially commented for unknown reasons, uncommented it.
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   course: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Courses'
@@ -12,12 +13,11 @@ const testSchema = new mongoose.Schema({
     type: String,
     enum: ['new', 'completed'],
     required: true
-  }, questions: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Question'
-    }
-  ],
+  }, 
+  questions: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Question'
+  }],
 })
 
 module.exports = mongoose.model('Test', testSchema)
