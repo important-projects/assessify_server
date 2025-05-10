@@ -12,7 +12,7 @@ const pdfparse = require('pdf-parse')
 // Configure Multer to handle file uploads (for single file)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/') // Adjust the folder where you want to save the files
+    cb(null, 'uploads/')
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + '-' + file.originalname)
@@ -116,10 +116,10 @@ router.get('/leaderboard', protect, isAdmin, async (req, res) => {
   }
 })
 
+
 // Create a new test (Admin Access Only)
 router.post(
   '/tests/create',
-  protect,
   isAdmin,
   upload.single('file'),
   async (req, res) => {
