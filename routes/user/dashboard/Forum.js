@@ -18,8 +18,6 @@ router.post("/create", protect, async (req, res) => {
   }
 });
 
-// Omooooooooooooooooooooo......was just testing how the fuck I pushed the .env file into the repo
-// sight
 // Get all posts
 router.get("/posts", async (req, res) => {
   try {
