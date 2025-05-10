@@ -90,7 +90,8 @@ router.post("/downvote/:postId", protect, async (req, res) => {
     const post = await Post.findById(req.params.postId);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    post.downvotes += 1;
+    // Edit: was initially post.downvotes += 1; changed + to -
+    post.downvotes -= 1;
     await post.save();
 
     res.status(200).json({ message: "Post downvoted successfully", downvotes: post.downvotes });

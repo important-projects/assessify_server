@@ -6,9 +6,7 @@ const jwt = require('jsonwebtoken')
 const User = require('../../../models/User')
 const Admin = require('../../../models/Admin')
 const Course = require("../../../models/Courses")
-
-const dotenv = require('dotenv')
-dotenv.config()
+require('dotenv').config()
 
 // Middleware to authenticate user JWT token
 const protect = async (req, res, next) => {
