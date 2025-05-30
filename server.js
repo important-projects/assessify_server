@@ -43,7 +43,7 @@ app.use(
 )
 
 mongoose
-  .connect(process.env.DEV_DB_URI, {
+  .connect(process.env.DB_URI, {
     serverSelectionTimeoutMS: 100000
   })
   .then(() => {
