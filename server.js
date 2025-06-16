@@ -29,7 +29,7 @@ app.use(express.urlencoded({ extended: true }))
 // cors config
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(','),
+    origin: process.env.ALLOWED_ORIGINS.split(','),
     // || [
     // "http://localhost:5173",
     // "http://localhost:5174",
