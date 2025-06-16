@@ -29,21 +29,22 @@ app.use(express.urlencoded({ extended: true }))
 // cors config
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      // 'https://assessify-ten.vercel.app',
-      '*'
-      // "https://assessify-server.onrender.com"
-    ],
-    methods: 'GET,POST,PUT,DELETE',
+    origin: process.env.ALLOWED_ORIGINS?.split(','),
+    // || [
+    // "http://localhost:5173",
+    // "http://localhost:5174",
+    // 'https://assessify-ten.vercel.app',
+    // '*'
+    // "https://assessify-server.onrender.com"
+    // ],
+    methods: 'GET,POST,PUT,DELETE,PATHCH,OPTIONS',
     allowedHeaders: 'Content-Type,Authorization',
     credentials: true
   })
 )
 
 mongoose
-  .connect(process.env.DEV_DB_URI, {
+  .connect(process.env.DB_URI, {
     serverSelectionTimeoutMS: 100000
   })
   .then(() => {
@@ -111,7 +112,7 @@ app.get('/auth/google/callback', async (req, res) => {
       let userNumber;
       let isUnique = false;
       while (!isUnique) {
-        userNumber = Math.floor(100000 + Math.random() * 900000)
+        userNumber = Math.floor(100000 + Math.random() * 9000@vercel/analytics00)
         const existingUser = await User.findOne({ userNumber })
         if (!existingUser) {
           isUnique = true

@@ -19,6 +19,6 @@ router.get("/:id", async (req, res) => {
             error,
         });
     }
-})
+})  
 
 module.exports = router
