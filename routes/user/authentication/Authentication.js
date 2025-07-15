@@ -35,6 +35,44 @@ const protect = async (req, res, next) => {
   }
 }
 
+router.post("/admin/register", async (req, res) => {
+  const { username, email, password } = req.body
+  if (!username || !email || !password) {
+    return res.status(400).json({ message: "All fields are required" })
+  }
+  try {
+    const adminNumber = Math.floor(100000 + Math.random() * 900000)
+    const existingUserByEmail = await Admin.findOne({ email })
+    if (existingUserByEmail) {
+      console.log('Email is already in use')
+      return res.status(400).json({ message: 'Email used' })
+    }
+    const existingUserByUsername = await Admin.findOne({ username })
+    if (existingUserByUsername) {
+      console.log('Username already used')
+      return res.status(400).json({ message: 'Username already used' })
+    }
+
+    await Admin.create({
+      username,
+      email,
+      password: await bcrypt.hash(password, 10),
+      adminNumber
+    })
+    console.log('Admin registered successfully')
+    return res.status(201).json({
+      message: 'Admin registered successfully', admin: {
+        username,
+        email,
+      }
+    })
+  }
+  catch (error) {
+    console.error('Error checking existing admin:', error)
+    return res.status(500).json({ message: 'Server error while checking existing admin' })
+  }
+})
+
 // User registration
 router.post('/register', async (req, res) => {
   const { username, email, password, courses } = req.body;
@@ -239,6 +277,53 @@ router.post('/login', async (req, res) => {
 
   try {
     const user = await User.findOne({ email }).select('+password')
+    if (!user) {
+      console.log('Invalid email')
+      return res.status(400).json({ message: 'Invalid email' })
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password)
+    if (!isMatch) {
+      console.log('Invalid password')
+      return res.status(400).json({ message: 'Invalid password' })
+    }
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN || '1h'
+    })
+
+    const userDetails = {
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      age: user.age,
+      userNumber: user.userNumber,
+      registeredCourses: user.registeredCourses
+    }
+
+    console.log('Login successful:', { user: userDetails, token })
+    return res.status(200).json({
+      message: 'Login successful.',
+      user: userDetails,
+      token
+    })
+  } catch (error) {
+    console.error('Login error:', error)
+    return res.status(500).json({ message: 'Login error.', error })
+  }
+})
+
+// Admin login
+router.post('/admin/login', async (req, res) => {
+  const { email, password } = req.body
+
+  if (!email || !password) {
+    console.log('Email and password are required')
+    return res.status(400).json({ message: 'Email and password are required' })
+  }
+
+  try {
+    const user = await Admin.findOne({ email }).select('+password')
     if (!user) {
       console.log('Invalid email')
       return res.status(400).json({ message: 'Invalid email' })
