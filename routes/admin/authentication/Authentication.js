@@ -10,7 +10,7 @@ require("dotenv").config()
 // Middleware to check if the user is an admin
 const isAdmin = async (req, res, next) => {
     try {
-        console.log('Checking admin access for user ID:', req.user?.id)
+        console.log('Checking admin access for user ID:', req.user.id)
 
         if (!req.user || !req.user.id) {
             console.log('Unauthorized access attempt - No admin information found')
@@ -127,7 +127,7 @@ router.post('/login', async (req, res) => {
         const userDetails = {
             id: user._id,
             email: user.email,
-            userNumber: user.userNumber
+            adminNumber: user.adminNumber,
         }
 
         console.log('Login successful:', { user: userDetails, token })
@@ -141,8 +141,5 @@ router.post('/login', async (req, res) => {
         return res.status(500).json({ message: 'Login error.', error })
     }
 })
-
-
-
 
 module.exports = { router, isAdmin }

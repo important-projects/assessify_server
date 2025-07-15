@@ -1,24 +1,31 @@
-const express = require('express')
-const router = express.Router()
-const Admin = require('../../../models/Admin')
-const { isAdmin } = require("../../user/authentication/Authentication")
+const express = require('express');
+const router = express.Router();
+const Admin = require('../../../models/Admin');
+const { isAdmin } = require('../authentication/Authentication');
+const { protect } = require('../../user/authentication/Authentication');
 
-router.get("/:id", async (req, res) => {
-    console.log("Fetched user id:", req.params.id)
+// Route: GET /dashboard/admin/info
+router.get("/:adminId", protect, isAdmin, async (req, res) => {
     try {
-        const user = await Admin.findById(req.params.id).select('username email age userNumber registeredCourses avatarUrl');
+        const { adminId } = req.params;
+        console.log("Fetched admin ID from token:", adminId);
+
+        const user = await Admin.findById(adminId).select(
+            'username email adminNumber'
+        );
+
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            return res.status(404).json({ message: 'Admin not found' });
         }
-        console.log("User found: ", user);
+
         res.json(user);
     } catch (error) {
-        console.error("Error fetching dashboard data:", error);
+        console.error("Error fetching admin data:", error);
         res.status(500).json({
-            message: "Error fetcing user:",
-            error,
+            message: "Error fetching admin data",
+            error: error.message,
         });
     }
-})  
+});
 
-module.exports = router
+module.exports = router;

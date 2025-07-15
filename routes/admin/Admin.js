@@ -1,5 +1,5 @@
 const express = require('express')
-// const Question = require("../models/Question");
+const Question = require("../../models/Question")
 const { protect } = require('../user/authentication/Authentication')
 const { isAdmin } = require('./authentication/Authentication')
 const Test = require('../../models/Test')
@@ -127,6 +127,14 @@ router.post(
     const file = req.file
     const adminId = req.user.id
 
+    if (!testName || !course || !category) {
+      return res.status(400).json({ message: "Invalid request body" })
+    }
+    if (!mongoose.Types.ObjectId.isValid(course)) {
+      return res.status(400).json({ message: 'Invalid course ID' });
+    }
+
+
     // Validate uploaded file
     if (
       !file ||
@@ -208,7 +216,7 @@ router.post(
       })
     }
   }
-) 
+)
 
 
 module.exports = router
