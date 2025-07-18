@@ -19,7 +19,7 @@ const courseSchema = new mongoose.Schema(
   }
 )
 
-courseSchema.set('toJSON', { virtuals: true, versionKey: false })
-courseSchema.set('toObject', { virtuals: true, versionKey: false })
+// courseSchema.set('toJSON', { virtuals: true, versionKey: false })
+// courseSchema.set('toObject', { virtuals: true, versionKey: false })
 
 module.exports = mongoose.model('Course', courseSchema)

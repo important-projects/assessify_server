@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
-const Test = require('./models/Test'); // Assuming Test model is in './models/Test'
+const Test = require('./models/Test');
 const Question = require('./models/Question');
-const User = require('./models/User'); // Assuming User model exists
-const Courses = require('./models/Courses'); // Assuming Courses model exists
+const User = require('./models/User');
+const Courses = require('./models/Courses');
 require('dotenv').config();
 
 mongoose
@@ -12,56 +12,72 @@ mongoose
 
 async function seedTests() {
   try {
-    // Fetch all users, courses, and questions
     const users = await User.find({}).select('_id');
-    const courses = await Courses.find({}).select('_id name');
-    const questions = await Question.find({}).select('_id course');
+    const courses = await Courses.find({}).select('_id name code level');
 
-    if (users.length === 0 || courses.length === 0 || questions.length === 0) {
-      console.log('Please ensure Users, Courses, and Questions are seeded.');
+    if (users.length === 0 || courses.length === 0) {
+      console.log('Please seed users and courses first.');
       return mongoose.disconnect();
     }
 
-    // Define sample test data
+    console.log('Creating dummy questions...');
+    const createdQuestions = [];
+
+    for (const course of courses) {
+      for (let i = 1; i <= 100; i++) {
+        const q = await Question.create({
+          course: course._id,
+          questionText: `What is the meaning of Question ${i} for ${course.name}?`,
+          questionType: 'objective',
+          options: ['Option A', 'Option B', 'Option C', 'Option D'],
+          correctAnswer: 'Option A',
+          points: 10
+        });
+
+        createdQuestions.push(q);
+      }
+    }
+
+    console.log(`${createdQuestions.length} dummy questions created.`);
+
+    console.log('Creating test documents...');
     const testData = [];
 
-    // Create 5 sample tests for different users and courses
-    for (let i = 0; i < 5; i++) {
-      // Randomly select a user
+    for (let i = 0; i < 100; i++) {
       const user = users[Math.floor(Math.random() * users.length)];
-
-      // Randomly select a course
       const course = courses[Math.floor(Math.random() * courses.length)];
 
-      // Filter questions for the selected course
-      const courseQuestions = questions.filter(q => q.course === course.name);
-
-      // Select 5 random questions from the course (or fewer if not enough questions)
+      const courseQuestions = createdQuestions.filter(
+        q => String(q.course) === String(course._id)
+      );
       const selectedQuestions = courseQuestions
         .sort(() => 0.5 - Math.random())
-        .slice(0, Math.min(5, courseQuestions.length));
+        .slice(0, Math.min(100, courseQuestions.length));
 
-      // Generate mock answer IDs and calculate totalScore
-      const answers = selectedQuestions.map(() => new mongoose.Types.ObjectId());
-      const totalScore = Math.floor(Math.random() * (selectedQuestions.length * 10)) + 1; // Random score between 1 and max possible
-
-      // Randomly assign status
-      const status = Math.random() > 0.5 ? 'new' : 'completed';
+      const now = new Date();
+      const duration = 30; // minutes
+      const startTime = now;
+      const endTime = new Date(now.getTime() + duration * 60000);
+      const totalScore = selectedQuestions.reduce((acc, q) => acc + q.points, 0);
 
       testData.push({
         userId: user._id,
         course: course._id,
-        answers: answers,
-        totalScore: totalScore,
-        createdAt: new Date(),
-        status: status,
+        courseCode: course.code || 'GEN101',
+        testName: `Sample Test ${i + 1}`,
+        level: course.level || '100',
         questions: selectedQuestions.map(q => q._id),
+        duration,
+        startTime,
+        endTime,
+        totalScore,
+        status: Math.random() > 0.5 ? 'new' : 'completed',
+        createdAt: now
       });
     }
 
-    // Insert test data
     await Test.insertMany(testData);
-    console.log('Tests seeded successfully');
+    console.log('Tests seeded successfully.');
   } catch (err) {
     console.error('Error seeding tests:', err);
   } finally {
@@ -70,5 +86,3 @@ async function seedTests() {
 }
 
 seedTests();
-
-module.exports = seedTests;
