@@ -47,20 +47,20 @@ router.get("/active/:userId", async (req, res) => {
 });
 */
 
-router.get("/user/:id", protect, async (req, res) => {
-  console.log("Fetched user id:", req.params.id);
+router.get("/user", protect, async (req, res) => {
+  const userId = req.user.id;
+  console.log("Decoded user id:", userId);
 
   try {
-    const user = await User.findById(req.params.id).select('username email age userNumber registeredCourses avatarUrl');
+    const user = await User.findById(userId).select('username email age userNumber registeredCourses avatarUrl');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    console.log("User found: ", user);
     res.json(user);
   } catch (error) {
     console.error("Error fetching user: ", error);
     res.status(500).json({
-      message: "Error fetcing user:",
+      message: "Error fetching user",
       error,
     });
   }
