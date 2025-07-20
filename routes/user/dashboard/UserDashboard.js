@@ -367,7 +367,7 @@ router.post('/submit-test/:testId', protect, async (req, res) => {
       });
     }
 
-    const isPremiumUser = user?.subscription?.status === 'active';
+    const isPremiumUser = user.isPremium() && user.hasActiveSubscription();
     const processingResults = await processAnswers(
       userId,
       testId,

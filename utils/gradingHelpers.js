@@ -91,25 +91,30 @@ async function processQuestion(question, answer, maxPoints, isPremiumUser) {
         } else {
             // Try AI grading for premium users
             if (isPremiumUser) {
-                const aiResult = await gradeWithAI(question, answer, maxPoints);
-                result = aiResult?.success ? aiResult : null;
+                try {
+                    const aiResult = await gradeWithAI(question, answer, maxPoints);
+                    if (aiResult?.success) {
+                        result = aiResult;
+                        result.gradedWithAI = true;
+                    }
+                } catch (aiError) {
+                    console.error('AI grading failed:', aiError);
+                }
             }
 
             // Fallback to basic grading if AI fails or not premium
             if (!result) {
                 result = basicTheoryGrading(question, answer, maxPoints);
+                result.gradedWithAI = false;
+
                 if (isPremiumUser) {
-                    return {
-                        result,
-                        error: 'AI grading failed',
-                        isAI: true
-                    };
+                    result.aiError = 'AI grading unavailable, used basic grading';
                 }
             }
         }
 
-        return { result };
         console.log(result)
+        return { result };
     } catch (error) {
         return {
             error: error.message,

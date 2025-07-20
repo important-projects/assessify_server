@@ -52,21 +52,47 @@ const userSchema = new mongoose.Schema(
       type: {
         status: {
           type: String,
-          enum: ['active', 'inactive', 'trial', 'expired'],
-          default: 'inactive',
+          enum: ['active', 'canceled', 'expired', 'inactive'],
+          default: 'inactive'
         },
+        plan: {
+          type: String,
+          enum: ['basic', 'premium', 'enterprise'],
+          default: 'basic'
+        },
+        validUntil: Date,
+        paymentMethod: String,
+        billingCycle: {
+          type: String,
+          enum: ['monthly', 'annual']
+        }
       },
-      validate: {
-        validator: function (v) {
-          return !Array.isArray(v);
-        },
-        message: 'Subscription must be an object, not an array'
+      default: {}
+    },
+    features: {
+      aiGrading: {
+        type: Boolean,
+        default: false
+      },
+      advancedAnalytics: {
+        type: Boolean,
+        default: false
       }
     }
   },
+
   { timestamps: true }
 )
 
+userSchema.methods.isPremium = function () {
+  return this.subscription?.status === 'active' &&
+    ['premium', 'enterprise'].includes(this.subscription?.plan);
+};
+
+userSchema.methods.hasActiveSubscription = function () {
+  return this.subscription?.status === 'active' &&
+    this.subscription?.validUntil > new Date();
+};
 
 module.exports = mongoose.model('User', userSchema)
 
