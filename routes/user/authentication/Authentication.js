@@ -396,7 +396,7 @@ router.post('/admin/login', async (req, res) => {
   }
 })
 
-router.get('/verify', async (req, res) => {
+router.get('/verify', protect, async (req, res) => {
   try {
     res.json({
       authenticated: true,
