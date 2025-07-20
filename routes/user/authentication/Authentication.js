@@ -128,7 +128,7 @@ router.post('/register', async (req, res) => {
     await user.save();
 
     // Generate JWT token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
 
     // Send response
     console.log('User registered successfully:', { user, token });
@@ -161,12 +161,15 @@ router.get('/google/callback', async (req, res) => {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    const oauth2 = google.oauth2({
-      auth: oauth2Client,
-      version: 'v2',
-    });
+    // const oauth2 = google.oauth2({
+    //   auth: oauth2Client,
+    //   version: 'v2',
+    // });
 
-    const { data } = await oauth2.userinfo.get();
+    // const { data } = await oauth2.userinfo.get();
+
+
+    const { data } = await google.oauth2('v2').userinfo.get({ auth: oauth2Client });
 
     const googleEmail = data.email;
     const googleName = (data.name || data.email.split('@')[0]).replace(/\W+/g, '_'); // Sanitize username
@@ -218,10 +221,9 @@ router.get('/google/callback', async (req, res) => {
       subscription: user.subscription,
       role: user.role,
       status: user.status,
-      tokens
     };
 
-    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
     console.log(token)
 
     // Set the cookie
@@ -243,7 +245,7 @@ router.get('/google/callback', async (req, res) => {
       status: user.status,
     }));
 
-    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/success?user=${userData}`);
+    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/success?user=${userData}/token=${token}`);
   } catch (error) {
     console.error('Error during Google authentication:', error);
     res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/error?message=${encodeURIComponent('Authentication failed')}`);
@@ -322,7 +324,7 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '1h'
+      expiresIn: process.env.JWT_EXPIRES_IN || process.env.JWT_EXPIRES_IN
     })
 
     const userDetails = {
@@ -370,7 +372,7 @@ router.post('/admin/login', async (req, res) => {
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '1h'
+      expiresIn: process.env.JWT_EXPIRES_IN
     })
 
     const userDetails = {
@@ -394,7 +396,7 @@ router.post('/admin/login', async (req, res) => {
   }
 })
 
-router.get('/verify', protect, async (req, res) => {
+router.get('/verify', async (req, res) => {
   try {
     res.json({
       authenticated: true,
