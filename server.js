@@ -2,6 +2,7 @@ const express = require('express')
 const http = require('http')
 const app = express()
 const cors = require('cors')
+const cookieParser = require('cookie-parser')
 const mongoose = require('mongoose')
 const { router: AuthRoutes } = require('./routes/user/authentication/Authentication')
 const TestRoutes = require("./routes/user/dashboard/Test");
@@ -26,6 +27,7 @@ mongoose.set('strictPopulate', false)
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
+app.use(cookieParser());
 // cors config
 app.use(
   cors({

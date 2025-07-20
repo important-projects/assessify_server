@@ -24,19 +24,47 @@ async function seedTests() {
     const createdQuestions = [];
 
     for (const course of courses) {
-      for (let i = 1; i <= 100; i++) {
+      // Create 3 objective questions
+      for (let i = 1; i <= 3; i++) {
         const q = await Question.create({
           course: course._id,
-          questionText: `What is the meaning of Question ${i} for ${course.name}?`,
+          questionText: `Objective Q${i} for ${course.name}?`,
           questionType: 'objective',
-          options: ['Option A', 'Option B', 'Option C', 'Option D'],
-          correctAnswer: 'Option A',
-          points: 10
+          options: [
+            'A. First option',
+            'B. Second option',
+            'C. Third option',
+            'D. Fourth option'
+          ],
+          correctAnswer: 'A',
+          explanation: 'The correct answer is A because it best fits the context.',
+          points: 2,
+          difficulty: 'easy'
+        });
+
+        createdQuestions.push(q);
+      }
+
+      // Create 2 theory questions
+      for (let i = 1; i <= 2; i++) {
+        const q = await Question.create({
+          course: course._id,
+          questionText: `Theory Q${i} for ${course.name}? Explain in detail.`,
+          questionType: 'theory',
+          correctAnswer: 'A detailed answer covering all major points.',
+          explanation: 'Sample explanation for grading reference.',
+          keywords: [
+            { term: 'concept', weight: 0.4 },
+            { term: 'analysis', weight: 0.6 }
+          ],
+          points: 5,
+          difficulty: 'medium'
         });
 
         createdQuestions.push(q);
       }
     }
+
 
     console.log(`${createdQuestions.length} dummy questions created.`);
 
@@ -50,9 +78,18 @@ async function seedTests() {
       const courseQuestions = createdQuestions.filter(
         q => String(q.course) === String(course._id)
       );
-      const selectedQuestions = courseQuestions
+
+      const objectiveQuestions = courseQuestions
+        .filter(q => q.questionType === 'objective')
         .sort(() => 0.5 - Math.random())
-        .slice(0, Math.min(100, courseQuestions.length));
+        .slice(0, 3);
+
+      const theoryQuestions = courseQuestions
+        .filter(q => q.questionType === 'theory')
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 2);
+
+      const selectedQuestions = [...objectiveQuestions, ...theoryQuestions];
 
       const now = new Date();
       const duration = 30; // minutes

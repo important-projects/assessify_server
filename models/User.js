@@ -3,48 +3,44 @@ const mongoose = require('mongoose')
 const userSchema = new mongoose.Schema(
   {
     username: {
-      type: String, 
+      type: String,
       required: true,
-      unique: true 
+      unique: true
     },
-    email: { 
-      type: String, 
+    email: {
+      type: String,
       required: true,
       // regex to validate email. must be in the format `example@gmail.com`
       match: [
         /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
         "Please provide a valid email."
       ],
-      unique: true 
+      unique: true
     },
-    password: { 
+    password: {
       type: String,
       required: true,
       unique: true,
       select: false // does not return the hashed password when this model is queried
     },
-    userNumber: { 
-      type: Number, 
-      required: true, 
-      unique: true 
+    userNumber: {
+      type: Number,
+      required: true,
+      unique: true
     },
-    avatarUrl: { 
+    avatarUrl: {
       type: String
     },
     authProvider: {
-      type: String, 
+      type: String,
       enum: ['manual', 'google'],
       default: 'manual'
     },
-    premium: { 
-      type: Boolean, 
-      default: false 
-    },
     registeredCourses: [
-      { 
-        _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' }, 
-        name: String, 
-        description: String 
+      {
+        _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
+        name: String,
+        description: String
       }
     ],
     testSubmissions: [
@@ -52,8 +48,21 @@ const userSchema = new mongoose.Schema(
         type: mongoose.Schema.Types.ObjectId,
         ref: 'TestSubmission'
       }
-    ]
-
+    ], subscription: {
+      type: {
+        status: {
+          type: String,
+          enum: ['active', 'inactive', 'trial', 'expired'],
+          default: 'inactive',
+        },
+      },
+      validate: {
+        validator: function (v) {
+          return !Array.isArray(v);
+        },
+        message: 'Subscription must be an object, not an array'
+      }
+    }
   },
   { timestamps: true }
 )

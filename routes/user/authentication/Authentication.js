@@ -10,30 +10,35 @@ require('dotenv').config()
 
 // Middleware to authenticate user JWT token
 const protect = async (req, res, next) => {
-  const token = req.header('Authorization')?.split(' ')[1]
+  // Get token from either Authorization header or cookie
+  const authHeader = req.header('Authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : req.cookies?.token;
+
+  console.log('Token found:', token ? 'Yes' : 'No');
+  console.log('Auth header:', authHeader);
+  console.log('Cookies:', req.cookies);
 
   if (!token) {
-    console.log('Access banned due to missing token')
-    return res.status(401).json({ message: 'Access banned.' })
+    console.log('Access denied - no token found in headers or cookies');
+    return res.status(401).json({
+      success: false,
+      message: 'Access denied. No authentication token provided.'
+    });
   }
-  if (!req.headers.authorization) {
-    console.log('No token provided')
-    return res
-      .status(401)
-      .json({ message: 'Access denied. No token provided.' })
-  }
-  console.log('Authorization Header:', req.headers.authorization)
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = decoded
-    console.log('Decoded user:', req.user)
-    next()
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    console.log('Authenticated user:', decoded.id);
+    next();
   } catch (error) {
-    console.error('JWT verification failed:', error)
-    return res.status(403).json({ message: 'Invalid Token!.' })
+    console.error('JWT verification failed:', error.message);
+    return res.status(403).json({
+      success: false,
+      message: 'Invalid or expired token. Please log in again.'
+    });
   }
-}
+};
 
 router.post("/admin/register", async (req, res) => {
   const { username, email, password } = req.body
@@ -150,33 +155,33 @@ router.get('/google', (req, res) => {
 })
 
 router.get('/google/callback', async (req, res) => {
-  const code = req.query.code
+  const code = req.query.code;
 
   try {
-    const { tokens } = await oauth2Client.getToken(code)
-    oauth2Client.setCredentials(tokens)
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
 
     const oauth2 = google.oauth2({
       auth: oauth2Client,
       version: 'v2',
-    })
+    });
 
-    const { data } = await oauth2.userinfo.get()
+    const { data } = await oauth2.userinfo.get();
 
-    const googleEmail = data.email
-    const googleName = data.name || data.email.split('@')[0]
-    const avatarUrl = data.picture
+    const googleEmail = data.email;
+    const googleName = (data.name || data.email.split('@')[0]).replace(/\W+/g, '_'); // Sanitize username
+    const avatarUrl = data.picture;
 
-    let user = await User.findOne({ email: googleEmail })
+    let user = await User.findOne({ email: googleEmail });
 
     if (!user) {
-      let userNumber
-      let isUnique = false
+      let userNumber;
+      let isUnique = false;
       while (!isUnique) {
-        userNumber = Math.floor(100000 + Math.random() * 900000)
-        const existingUser = await User.findOne({ userNumber })
+        userNumber = Math.floor(100000 + Math.random() * 900000);
+        const existingUser = await User.findOne({ userNumber });
         if (!existingUser) {
-          isUnique = true
+          isUnique = true;
         }
       }
 
@@ -185,37 +190,65 @@ router.get('/google/callback', async (req, res) => {
         email: googleEmail,
         password: await bcrypt.hash(Math.random().toString(36).slice(2), 10),
         userNumber,
-        registeredCourses: [],
         avatarUrl,
-        authProvider: 'google'
-      })
-      await user.save()
+        authProvider: 'google',
+        subscription: { status: 'inactive' },
+        registeredCourses: [],
+        status: 'active'
+      });
+      await user.save();
     } else {
-      user.username = user.username || googleName
-      user.avatarUrl = user.avatarUrl || avatarUrl
-      user.authProvider = user.authProvider || 'google'
-      await user.save()
+      // Update existing user if needed
+      const updates = {};
+      if (!user.username) updates.username = googleName;
+      if (!user.avatarUrl) updates.avatarUrl = avatarUrl;
+      if (!user.authProvider) updates.authProvider = 'google';
+
+      if (Object.keys(updates).length > 0) {
+        await User.updateOne({ _id: user._id }, updates);
+      }
     }
 
+    // Create clean token payload without sensitive data
     const tokenPayload = {
       id: user._id,
       username: user.username,
       email: user.email,
-      registeredCourses: user.registeredCourses
-    }
+      avatarUrl: user.avatarUrl,
+      subscription: user.subscription,
+      role: user.role,
+      status: user.status,
+      tokens
+    };
 
-    console.log(data)
-    console.log(tokenPayload)
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '1h' });
+    console.log(token)
 
-    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '1h' })
-    const encodedUser = encodeURIComponent(JSON.stringify(tokenPayload))
+    // Set the cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 3600000
+    });
 
-    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/google/callback?token=${token}&user=${encodedUser}`)
+    // Redirect to frontend with user data in URL (not recommended for sensitive data)
+    const userData = encodeURIComponent(JSON.stringify({
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      subscription: user.subscription,
+      role: user.role,
+      status: user.status,
+    }));
+
+    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/success?user=${userData}`);
   } catch (error) {
-    console.error('Error during Google auhentication:', error.message)
-    res.status(500).json({ error: 'Authentication failed', details: error.message });
+    console.error('Error during Google authentication:', error);
+    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/error?message=${encodeURIComponent('Authentication failed')}`);
   }
-})
+});
 
 router.post('/courses/register', protect, async (req, res) => {
   const { courseIds } = req.body
@@ -298,7 +331,8 @@ router.post('/login', async (req, res) => {
       email: user.email,
       age: user.age,
       userNumber: user.userNumber,
-      registeredCourses: user.registeredCourses
+      registeredCourses: user.registeredCourses,
+      subscription: user.subscription
     }
 
     console.log('Login successful:', { user: userDetails, token })
@@ -360,5 +394,43 @@ router.post('/admin/login', async (req, res) => {
   }
 })
 
+router.get('/verify', protect, async (req, res) => {
+  try {
+    res.json({
+      authenticated: true,
+      user: {
+        id: req.user.id,
+        username: req.user.username,
+        email: req.user.email,
+        avatarUrl: req.user.avatarUrl,
+        role: req.user.role,
+        subscription: req.user.subscription
+      },
+      token: req.cookies.token
+    });
+    // const user = await User.findById(req.user?.id)
+    //   .select('-password -__v')
+    //   .lean();
 
+    // if (!user) {
+    //   return res.status(404).json({ error: 'User not found' });
+    // }
+
+    // if (!user) {
+    //   return res.status(404).json({ error: 'User not found' });
+    // }
+
+    // res.json({ user });
+
+    // const response = { user };
+    // if (!process.env.HTTP_ONLY_COOKIES) {
+    //   response.token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    // }
+
+    // res.json(response);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 module.exports = { router, protect }
