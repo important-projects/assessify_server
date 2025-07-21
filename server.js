@@ -13,7 +13,7 @@ const ForumRoutes = require('./routes/user/dashboard/Forum')
 const EmailRoute = require('./routes/mailer/Mailer')
 const originAdmin = require('./routes/admin/Admin')
 const { router: AdminRoute } = require('./routes/admin/authentication/Authentication')
-const subscriptionRoutes  = require("./routes/subscription/subscriptionRoutes")
+const subscriptionRoutes = require("./routes/subscription/subscriptionRoutes")
 const webhookRoutes = require("./routes/subscription/webhookRoutes")
 // const UploadRoute = require('./routes/admin/Upload')
 // const CreatePlan = require('./routes/payments/script')
@@ -41,9 +41,9 @@ app.use(
     // '*'
     // "https://assessify-server.onrender.com"
     // ],
-    methods: 'GET,POST,PUT,DELETE,PATHCH,OPTIONS',
-    allowedHeaders: 'Content-Type,Authorization',
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
   })
 )
 

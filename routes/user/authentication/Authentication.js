@@ -230,7 +230,7 @@ router.get('/google/callback', async (req, res) => {
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none',
       maxAge: 3600000
     });
 
@@ -245,7 +245,7 @@ router.get('/google/callback', async (req, res) => {
       status: user.status,
     }));
 
-    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/success?user=${userData}/token=${token}`);
+    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/success?token=${token}`);
   } catch (error) {
     console.error('Error during Google authentication:', error);
     res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/error?message=${encodeURIComponent('Authentication failed')}`);
