@@ -1,4 +1,5 @@
 const axios = require('axios');
+const crypto = require("crypto")
 
 const paystack = axios.create({
     baseURL: 'https://api.paystack.co',
@@ -60,5 +61,23 @@ module.exports = {
             console.error('Paystack plan creation error:', error.response?.data || error.message);
             throw error;
         }
+    },
+    verifyWebhookSignature: (body, signature) => {
+        const hash = crypto.createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
+            .update(JSON.stringify(body))
+            .digest('hex');
+        return hash === signature;
+    }, disableSubscription: async (subscriptionId) => {
+        const response = await paystack.post(`/subscription/disable`, {
+            code: subscriptionId,
+            token: process.env.PAYSTACK_SECRET_KEY
+        });
+        return response.data;
+    },
+
+    listCustomerCards: async (customerCode) => {
+        const response = await paystack.get(`/customer/${customerCode}`);
+        return response.data;
     }
+
 };
