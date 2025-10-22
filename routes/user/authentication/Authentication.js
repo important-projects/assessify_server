@@ -285,7 +285,7 @@ router.get("/google/callback", async (req, res) => {
 
 router.post("/courses/register", protect, async (req, res) => {
   const { courseIds } = req.body;
-  const userId = req.user?.id;
+  const { userId } = req.user?.id;
 
   if (!courseIds || !Array.isArray(courseIds)) {
     console.log("Invalid course IDs");
