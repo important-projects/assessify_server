@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const { google } = require("googleapis");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 
 const User = require("../models/user");
 const Admin = require("../models/admin");
@@ -132,8 +133,17 @@ const authController = {
     try {
       const userNumber = Math.floor(100000 + Math.random() * 900000);
       // Validate courses: Check if all provided courses exist
-      const courseIds = courses.map((course) => course._id);
+      const courseIds = courses.map(
+        (c) => new mongoose.Types.ObjectId(typeof c === "string" ? c : c._id)
+      );
+
       const validCourses = await Course.find({ _id: { $in: courseIds } });
+
+      console.log("courseIds:", courseIds);
+      console.log("validCourses:", validCourses);
+
+      console.log("Connected DB:", mongoose.connection.name);
+      console.log("Total courses:", await Course.countDocuments());
 
       if (validCourses.length !== courseIds.length) {
         console.log("One or more invalid courses selected");
@@ -392,7 +402,7 @@ const authController = {
   courseRegistration: async (req, res) => {
     const { courseIds } = req.body;
     const userId = req.user?.id;
-
+    c;
     if (!courseIds || !Array.isArray(courseIds)) {
       console.log("Invalid course IDs");
       return res.status(400).json({ message: "Course IDs must be an array" });
