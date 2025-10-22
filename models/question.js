@@ -139,14 +139,6 @@ const questionSchema = new mongoose.Schema({
             return null;
         }
     },
-    sampleAnswers: {
-        type: [{
-            text: String,
-            score: Number,
-            feedback: String
-        }],
-        default: []
-    },
     createdAt: {
         type: Date,
         default: Date.now
