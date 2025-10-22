@@ -53,13 +53,11 @@ const adminDashboardController = {
       }
     } catch (err) {
       if (file) fs.unlinkSync(file.path);
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Error checking course",
-          error: err.message,
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Error checking course",
+        error: err.message,
+      });
     }
 
     let savedQuestions = [];
@@ -172,13 +170,11 @@ const adminDashboardController = {
       res.status(200).json({ success: true, results });
     } catch (err) {
       console.error("Error fetching results:", err);
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "Error retrieving scores",
-          error: err.message,
-        });
+      res.status(500).json({
+        success: false,
+        message: "Error retrieving scores",
+        error: err.message,
+      });
     }
   },
 
@@ -191,13 +187,11 @@ const adminDashboardController = {
       res.status(200).json({ success: true, scores });
     } catch (err) {
       console.error("Error fetching top scores:", err);
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "Error retrieving top scores",
-          error: err.message,
-        });
+      res.status(500).json({
+        success: false,
+        message: "Error retrieving top scores",
+        error: err.message,
+      });
     }
   },
 
@@ -221,6 +215,56 @@ const adminDashboardController = {
     }
   },
 
+  createCourse: async (req, res) => {
+    try {
+      const { name, description } = req.body;
+      const userId = req.user?.id;
+
+      if (!name || !description) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Incomplete request" });
+      }
+
+      if (!userId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid request" });
+      }
+
+      const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      const existingCourse = await Course.findOne({
+        name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+      });
+
+      if (existingCourse) {
+        return res.status(409).json({
+          success: false,
+          message: "A course with this name already exists",
+        });
+      }
+
+      const newCourse = new Course({
+        name,
+        description,
+        createdBy: req.user?.id,
+      });
+      await newCourse.save();
+
+      return res.status(201).json({
+        success: true,
+        message: "Course created successfully",
+        course: newCourse,
+      });
+    } catch (error) {
+      console.error("Error creating new course:", error);
+      return res
+        .status(500)
+        .json({ success: false, message: "Internal server error", error });
+    }
+  },
+
   getPieData: async (req, res) => {
     try {
       const aggregated = await Test.aggregate([
@@ -234,13 +278,11 @@ const adminDashboardController = {
       res.status(200).json({ success: true, labels, values });
     } catch (err) {
       console.error("Error fetching pie data:", err);
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "Error retrieving pie chart data",
-          error: err.message,
-        });
+      res.status(500).json({
+        success: false,
+        message: "Error retrieving pie chart data",
+        error: err.message,
+      });
     }
   },
 
@@ -279,13 +321,11 @@ const adminDashboardController = {
       res.status(200).json({ success: true, leaderboard });
     } catch (err) {
       console.error("Error fetching leaderboard:", err);
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "Error retrieving leaderboard",
-          error: err.message,
-        });
+      res.status(500).json({
+        success: false,
+        message: "Error retrieving leaderboard",
+        error: err.message,
+      });
     }
   },
 };

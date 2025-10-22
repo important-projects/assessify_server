@@ -24,4 +24,11 @@ router.post(
   adminDashboardController.createTest
 );
 
+router.post(
+  "/courses/create",
+  protect,
+  isAdmin,
+  adminDashboardController.createCourse
+);
+
 module.exports = router;
