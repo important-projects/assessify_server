@@ -1,5 +1,7 @@
 const express = require("express");
 const router = express.Router();
+const NodeCache = require("node-cache");
+const answerCache = new NodeCache({ stdTTL: 3600 });
 const { protect } = require("../authentication/Authentication");
 const Test = require("../../../models/Test");
 const Course = require("../../../models/Courses");
@@ -9,6 +11,13 @@ const Question = require("../../../models/Question");
 const TestSubmission = require("../../../models/TestSubmission");
 const Response = require("../../../models/Response");
 const Results = require("../../../models/Results");
+const {
+  processAnswers,
+  saveTestSubmission,
+  saveTestResults,
+  buildSuccessResponse,
+} = require("../../../utils/gradingHelpers");
+
 // ========================================
 // Update user profile
 // ========================================
@@ -16,9 +25,12 @@ router.put("/profile", protect, async (req, res) => {
   const { age } = req.body;
   try {
     const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    if (age) user.age = age;
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (age) {
+      user.age = age;
+    }
     await user.save();
 
     res.json({ message: "Profile updated", user });
@@ -135,26 +147,26 @@ router.get("/courses/test/:courseId", protect, async (req, res) => {
     const tests = await Test.find({ course: courseId }).populate("questions");
 
     // Fetch all user's test submissions for this course
-    const submissions = await TestSubmission.find({ user: userId }).select('test status');
+    const submissions = await TestSubmission.find({ user: userId }).select(
+      "test status"
+    );
 
     // Create a map for faster lookup
     const submissionMap = new Map();
-    submissions.forEach(sub => {
+    submissions.forEach((sub) => {
       submissionMap.set(sub.test.toString(), sub.status);
     });
 
     // Attach user-specific status to each test
-    const testsWithUserStatus = tests.map(test => {
-      const userStatus = submissionMap.get(test._id.toString()) || 'new';
+    const testsWithUserStatus = tests.map((test) => {
+      const userStatus = submissionMap.get(test._id.toString()) || "new";
       return {
         ...test.toObject(),
-        userStatus
+        userStatus,
       };
     });
 
-    console.log(
-      course,
-      testsWithUserStatus)
+    console.log(course, testsWithUserStatus);
     res.status(200).json({
       message: "Course tests found",
       course,
@@ -220,7 +232,7 @@ router.get("/courses/view-test/:testId", protect, async (req, res) => {
   }
 });
 
-router.post('/test/start/:testId', protect, async (req, res) => {
+router.post("/test/start/:testId", protect, async (req, res) => {
   try {
     const { testId } = req.params;
     const userId = req.user.id;
@@ -229,13 +241,13 @@ router.post('/test/start/:testId', protect, async (req, res) => {
 
     // Validate testId
     if (!mongoose.Types.ObjectId.isValid(testId)) {
-      return res.status(400).json({ message: 'Invalid test ID' });
+      return res.status(400).json({ message: "Invalid test ID" });
     }
 
     // Fetch user and validate
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     // Fetch test and ensure it belongs to one of the user's registered courses
@@ -244,18 +256,25 @@ router.post('/test/start/:testId', protect, async (req, res) => {
       course: { $in: user.registeredCourses.map((c) => c._id) },
     });
     if (!test) {
-      return res.status(403).json({ message: 'Test not found or not accessible for your courses' });
+      return res
+        .status(403)
+        .json({ message: "Test not found or not accessible for your courses" });
     }
 
     // Check if test is already completed
-    if (test.status === 'completed') {
-      return res.status(400).json({ message: 'Test is already completed' });
+    if (test.status === "completed") {
+      return res.status(400).json({ message: "Test is already completed" });
     }
 
     // Check if user has already started or completed the test
-    const userTestRecord = await TestSubmission.findOne({ user: userId, test: testId });
+    const userTestRecord = await TestSubmission.findOne({
+      user: userId,
+      test: testId,
+    });
     if (userTestRecord) {
-      return res.status(400).json({ message: 'Test already started or completed' });
+      return res
+        .status(400)
+        .json({ message: "Test already started or completed" });
     }
 
     // Set startTime and endTime
@@ -271,24 +290,25 @@ router.post('/test/start/:testId', protect, async (req, res) => {
       endTime,
       level: test.level,
       duration: test.duration,
-      status: 'ongoing',
+      status: "ongoing",
       // answer: test.answers, questions: test.questions
     });
 
-
     await userTestResponse.save();
-    console.log(`TestSubmission saved: ${userTestResponse._id} for user ${userId}`);
+    console.log(
+      `TestSubmission saved: ${userTestResponse._id} for user ${userId}`
+    );
 
     // Add submission to user's testSubmissions
     user.testSubmissions.push(userTestResponse._id);
-    await user.save();
+    await user.save({ validateBeforeSave: false });
 
-    test.status = 'ongoing';
+    test.status = "ongoing";
     await test.save();
 
     // Respond with test details
     res.status(200).json({
-      message: 'Test started successfully',
+      message: "Test started successfully",
       testId,
       testName: test.testName,
       courseId: test.course,
@@ -299,256 +319,480 @@ router.post('/test/start/:testId', protect, async (req, res) => {
       duration: test.duration,
       questions: test.questions,
       totalScore: test.totalScore,
-      status: 'ongoing',
+      status: "ongoing",
     });
   } catch (error) {
-    console.error('Error starting test:', error);
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({ message: 'Validation error', error: error.message });
+    console.error("Error starting test:", error);
+    if (error.name === "ValidationError") {
+      return res
+        .status(400)
+        .json({ message: "Validation error", error: error.message });
     }
-    if (error.name === 'CastError') {
-      return res.status(400).json({ message: 'Invalid ID format', error: error.message });
+    if (error.name === "CastError") {
+      return res
+        .status(400)
+        .json({ message: "Invalid ID format", error: error.message });
     }
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 });
 
-router.get('/test/questions/:testId', protect, async (req, res) => {
+router.get("/test/questions/:testId", protect, async (req, res) => {
   try {
     const { testId } = req.params;
-    console.log('Fetching questions for test ID:', testId);
+    console.log("Fetching questions for test ID:", testId);
 
     if (!mongoose.Types.ObjectId.isValid(testId)) {
-      return res.status(400).json({ message: 'Invalid test ID' });
+      return res.status(400).json({ message: "Invalid test ID" });
     }
 
-    const test = await Test.findById(testId).populate('questions');
-    console.log('Fetched Test:', test);
+    const test = await Test.findById(testId).populate("questions");
+    console.log("Fetched Test:", test);
 
     if (!test) {
-      return res.status(404).json({ message: 'Test not found' });
+      return res.status(404).json({ message: "Test not found" });
     }
 
-    console.log('Fetched Questions:', test.questions);
+    console.log("Fetched Questions:", test.questions);
     res.status(200).json({ questions: test.questions });
   } catch (error) {
-    console.error('Error fetching questions:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error("Error fetching questions:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-router.post('/submit-test/:testId', protect, async (req, res) => {
+router.post("/submit-test/:testId", protect, async (req, res) => {
   try {
     const { testId } = req.params;
-    const userId = req.user.id;
     const { answers } = req.body;
+    const userId = req.user.id;
 
-    // Validation checks
-    if (!answers || !Array.isArray(answers)) {
-      return res.status(400).json({ message: 'Answers array is required' });
-    }
-
-    // Fetch test with populated questions
-    const test = await Test.findById(testId).populate('course questions');
-    if (!test) {
-      return res.status(404).json({ message: 'Test not found' });
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(403).json({ message: 'Unauthorized' });
-    }
-
-    const userTest = await TestSubmission.findOne({ user: userId, test: testId });
-    if (!userTest) {
-      return res.status(404).json({ message: 'Test not started by user' });
-    }
-
-    if (userTest.status === 'completed') {
-      return res.status(400).json({ message: 'You have already completed this test' });
-    }
-
-    // Check if test time has expired
-    const now = new Date();
-    const endTime = new Date(userTest.endTime);
-    if (now > endTime) {
-      return res.status(400).json({ message: 'Test time has expired' });
-    }
-
-    let totalScore = 0;
-    const savedResponses = [];
-    const skippedAnswers = [];
-    const answerDetails = [];
-
-    // Enhanced theory question grading parameters
-    const THEORY_GRADING = {
-      MIN_WORDS: 20,          // Minimum words for full credit
-      KEYWORD_MATCH_POINTS: 0.5, // Points per matched keyword
-      MAX_POINTS: 5           // Maximum points for theory questions
-    };
-
-    for (const { questionId, answer } of answers) {
-      // Validate answer format
-      if (!mongoose.Types.ObjectId.isValid(questionId) || typeof answer !== 'string' || !answer.trim()) {
-        skippedAnswers.push({ questionId, reason: 'Invalid questionId or answer' });
-        continue;
-      }
-
-      // Verify question belongs to test
-      const question = test.questions.find(q => q._id.toString() === questionId);
-      if (!question) {
-        skippedAnswers.push({ questionId, reason: 'Question not part of test' });
-        continue;
-      }
-
-      let isCorrect = false;
-      let pointsEarned = 0;
-      const maxPoints = question.points || (question.questionType === 'objective' ? 1 : THEORY_GRADING.MAX_POINTS);
-
-      // Grading logic based on question type
-      if (question.questionType === 'objective') {
-        // Extract just the letter from the answer (e.g., "A" from "A. London")
-        const userAnswerLetter = answer.trim().charAt(0).toUpperCase();
-        const correctAnswerLetter = question.correctAnswer.trim().charAt(0).toUpperCase();
-
-        isCorrect = userAnswerLetter === correctAnswerLetter;
-        pointsEarned = isCorrect ? (question.points || 1) : 0;
-
-        console.log(`Objective question grading:`, {
-          questionId,
-          userAnswer: answer,
-          userAnswerLetter,
-          correctAnswer: question.correctAnswer,
-          correctAnswerLetter,
-          isCorrect,
-          pointsEarned
-        });
-      }
-      else if (question.questionType === 'theory') {
-        // Theory question - automated grading
-        const answerText = answer.trim();
-        const wordCount = answerText.split(/\s+/).length;
-
-        // Base score on length (minimum threshold)
-        const lengthScore = Math.min(wordCount / THEORY_GRADING.MIN_WORDS, 1) * maxPoints;
-
-        // Keyword matching score
-        let keywordScore = 0;
-        if (question.keywords && question.keywords.length > 0) {
-          const matchedKeywords = question.keywords.filter(keyword =>
-            answerText.toLowerCase().includes(keyword.toLowerCase())
-          );
-          keywordScore = matchedKeywords.length * THEORY_GRADING.KEYWORD_MATCH_POINTS;
-        }
-
-        // Combine scores (capped at max points)
-        pointsEarned = Math.min(
-          (lengthScore * 0.7) + (keywordScore * 0.3),
-          maxPoints
-        );
-
-        // Round to 1 decimal place
-        pointsEarned = Math.round(pointsEarned * 10) / 10;
-        isCorrect = pointsEarned >= (maxPoints * 0.7); // Considered correct if >= 70%
-      }
-
-      totalScore += pointsEarned;
-
-      // Save response
-      const response = await Response.create({
-        userId,
-        testId,
-        question: questionId,
-        answer,
-        isCorrect,
-        pointsEarned,
-        maxPoints,
-        questionType: question.questionType,
-        automatedGrading: true // Mark all grading as automated
-      });
-
-      savedResponses.push(response._id);
-
-      answerDetails.push({
-        questionId,
-        questionText: question.questionText,
-        questionType: question.questionType,
-        submittedAnswer: answer,
-        correctAnswer: question.correctAnswer,
-        isCorrect,
-        pointsEarned,
-        maxPoints,
-        feedback: question.questionType === 'theory' ?
-          'Automatically graded based on answer length and keyword matching' :
-          undefined
+    // Input validation
+    if (!Array.isArray(answers)) {
+      return res.status(400).json({
+        success: false,
+        message: "Answers must be provided as an array",
       });
     }
 
-    // Update test submission
-    userTest.status = 'completed';
-    userTest.score = totalScore;
-    userTest.submittedAt = new Date();
-    userTest.responses = savedResponses;
-    await userTest.save();
+    const [test, user] = await Promise.all([
+      Test.findById(testId).populate("questions"),
+      User.findById(userId),
+    ]);
 
-    // Create results record
-    await Results.create({
+    if (!test || !user) {
+      return res.status(404).json({
+        success: false,
+        message: "Test or user not found",
+      });
+    }
+
+    const isPremiumUser = user.isPremium() && user.hasActiveSubscription();
+    const processingResults = await processAnswers(
       userId,
       testId,
-      courseId: test.course._id,
-      score: totalScore,
-      totalPossibleScore: test.questions.reduce((sum, q) => sum + (q.points || (q.questionType === 'objective' ? 1 : THEORY_GRADING.MAX_POINTS)), 0),
-      totalQuestions: test.questions.length,
-      status: 'completed',
-      fullyAutomated: true
-    });
+      answers,
+      test.questions,
+      isPremiumUser
+    );
 
-    res.status(200).json({
-      message: 'Test submitted and graded successfully',
-      totalScore,
-      totalPossibleScore: test.questions.reduce((sum, q) => sum + (q.points || (q.questionType === 'objective' ? 1 : THEORY_GRADING.MAX_POINTS)), 0),
-      totalQuestions: test.questions.length,
-      answerDetails,
-      gradingSystem: {
-        theory: {
-          criteria: ['answer_length', 'keyword_matching'],
-          minWords: THEORY_GRADING.MIN_WORDS,
-          pointsPerKeyword: THEORY_GRADING.KEYWORD_MATCH_POINTS
-        }
-      }
-    });
+    // Save all data
+    const [submission, testResults] = await Promise.all([
+      saveTestSubmission(userId, testId, processingResults),
+      saveTestResults(userId, testId, test.course, {
+        ...processingResults,
+        answers: answers,
+      }),
+    ]);
+
+    console.log(submission, testResults);
+
+    // Prepare response
+    const response = buildSuccessResponse(test, processingResults);
+    res.json(response);
   } catch (error) {
-    console.error('Error submitting test:', error);
+    console.error("Test submission failed:", error);
     res.status(500).json({
-      message: 'Internal server error',
-      error: error.message
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
+  }
+});
+
+// AI Grading Service (mock implementation)
+// async function gradeWithAI(question, answer) {
+//   // In a real implementation, you would call an AI service API here
+//   // This is a mock implementation for demonstration
+
+//   // Simulate API call delay
+//   await new Promise(resolve => setTimeout(resolve, 1000));
+
+//   // Analyze answer length
+//   const wordCount = answer.trim().split(/\s+/).length;
+//   const lengthScore = Math.min(wordCount / 20, 1) * 0.4; // 40% weight
+
+//   // Keyword analysis
+//   const matchedKeywords = question.keywords?.filter(keyword =>
+//     answer.toLowerCase().includes(keyword.toLowerCase())
+//   ) || [];
+//   const keywordScore = (matchedKeywords.length / (question.keywords?.length || 1)) * 0.3; // 30% weight
+
+//   // Conceptual understanding (simulated AI analysis)
+//   const conceptScore = Math.random() * 0.3; // 30% weight (simulated)
+
+//   const totalScore = (lengthScore + keywordScore + conceptScore) * question.points;
+
+//   return {
+//     score: Math.round(totalScore * 10) / 10,
+//     feedback: generateAIFeedback(question, answer, matchedKeywords)
+//   };
+// }
+
+/*function generateAIFeedback(question, answer, matchedKeywords) {
+  const feedback = [];
+  const wordCount = answer.trim().split(/\s+/).length;
+
+  if (wordCount < 20) {
+    feedback.push(`Your answer could be more detailed (currently ${wordCount} words)`);
+  }
+
+  if (matchedKeywords.length < (question.keywords?.length || 0)) {
+    const missingKeywords = question.keywords?.filter(k => !matchedKeywords.includes(k));
+    feedback.push(`Consider discussing: ${missingKeywords?.join(', ')}`);
+  }
+
+  feedback.push("AI analysis suggests room for deeper explanation of concepts");
+
+  return feedback.join('. ');
+}
+*/
+
+// function gradeObjectiveQuestion(question, answer) {
+//   const isCorrect = answer.trim().charAt(0).toUpperCase() ===
+//     question.correctAnswer.trim().charAt(0).toUpperCase();
+//   return {
+//     score: isCorrect ? (question.points || 1) : 0,
+//     feedback: isCorrect ? "Correct answer" : "Incorrect answer",
+//     isCorrect,
+//     conceptsAddressed: [],
+//     improvementAreas: []
+//   };
+// }
+
+// function basicTheoryGrading(question, answer) {
+//   const wordCount = answer.split(/\s+/).length;
+//   const minWords = question.minWords || 20;
+//   const keywords = question.keywords || [];
+
+//   const matchedKeywords = keywords.filter(kw =>
+//     answer.toLowerCase().includes(kw.toLowerCase())
+//   );
+
+//   const score = Math.min(
+//     (wordCount / minWords * 0.5) +
+//     (matchedKeywords.length / keywords.length * 0.5 || 0.3),
+//     1
+//   ) * (question.points || 5);
+
+//   return {
+//     score: Math.round(score),
+//     feedback: `Basic evaluation: ${wordCount} words, ${matchedKeywords.length}/${keywords.length} keywords`,
+//     conceptsAddressed: matchedKeywords,
+//     improvementAreas: keywords.filter(kw => !matchedKeywords.includes(kw)),
+//     isCorrect: score >= (question.points || 5) * 0.7
+//   };
+// }
+
+// router.post('/submit-test/:testId', protect, async (req, res) => {
+//   try {
+//     const { testId } = req.params;
+//     const { answers } = req.body;
+//     const userId = req.user.id;
+//     console.log(`User ID ${userId}` + `Answers received ${answers}` + `Test ID ${testId}`)
+
+//     // Validation
+//     if (!Array.isArray(answers)) {
+//       return res.status(400).json({ success: false, message: 'Invalid answers format' });
+//     }
+
+//     if (!userId) {
+//       return res.status(401).json({ success: false, message: 'Unauthorized' });
+//     }
+
+//     const test = await Test.findById(testId).populate('questions');
+//     if (!test) {
+//       return res.status(404).json({ success: false, message: 'Test not found' });
+//     }
+
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ success: false, message: 'User not found' });
+//     }
+
+//     console.log(`User  ${user} ` + `Test   ${test}` + `User ID ${userId}`)
+//     const isPremiumUser = user?.subscription?.status === 'active';
+
+//     // Process answers
+//     let totalScore = 0;
+//     const answerDetails = [];
+//     const savedResponses = [];
+//     let aiFailures = 0;
+
+//     for (const { questionId, answer } of answers) {
+//       const question = test.questions.find(q => q._id.equals(questionId));
+//       if (!question) continue;
+
+//       const maxPoints = question.points || (question.questionType === 'objective' ? 1 : 5);
+//       let result;
+
+//       if (question.questionType === 'objective') {
+//         // Objective grading
+//         const isCorrect = answer.trim().charAt(0).toUpperCase() ===
+//           question.correctAnswer.trim().charAt(0).toUpperCase();
+//         result = {
+//           score: isCorrect ? maxPoints : 0,
+//           feedback: isCorrect ? 'Correct answer' : 'Incorrect answer',
+//           isCorrect,
+//           conceptsAddressed: [],
+//           improvementAreas: [],
+//           gradedWithAI: false
+//         };
+//       } else {
+//         // Theory grading
+//         try {
+//           const aiResult = await gradeWithAI(question, answer, maxPoints);
+//           if (aiResult?.success) {
+//             result = {
+//               ...aiResult,
+//               isCorrect: aiResult.score >= maxPoints * 0.7,
+//               gradedWithAI: isPremiumUser
+//             };
+//           } else {
+//             throw new Error('AI grading failed');
+//           }
+//         } catch (error) {
+//           aiFailures++;
+//           result = basicTheoryGrading(question, answer, maxPoints);
+//           result.gradedWithAI = false;
+//           result.isCorrect = result.score >= maxPoints * 0.7;
+//         }
+//       }
+
+//       // Save response - ensure userId is properly included
+//       const response = await Response.create({
+//         userId: userId, // Explicitly setting userId
+//         testId,
+//         question: questionId,
+//         answer,
+//         isCorrect: result.isCorrect,
+//         pointsEarned: result.score,
+//         maxPoints,
+//         feedback: result.feedback,
+//         conceptsAddressed: result.conceptsAddressed,
+//         improvementAreas: result.improvementAreas,
+//         questionType: question.questionType,
+//         gradedWithAI: result.gradedWithAI
+//       });
+//       console.log(response)
+
+//       savedResponses.push(response._id);
+//       answerDetails.push({
+//         questionId,
+//         questionText: question.questionText,
+//         questionType: question.questionType,
+//         submittedAnswer: answer,
+//         correctAnswer: question.questionType === 'objective' ? question.correctAnswer : null,
+//         isCorrect: result.isCorrect,
+//         pointsEarned: result.score,
+//         maxPoints,
+//         feedback: result.feedback,
+//         conceptsAddressed: result.conceptsAddressed,
+//         improvementAreas: result.improvementAreas,
+//         gradedWithAI: result.gradedWithAI
+//       });
+
+//       console.log(savedResponses)
+
+//       totalScore += result.score;
+//     }
+
+//     // Update or create test submission
+//     const submission = await TestSubmission.findOneAndUpdate(
+//       { user: userId, test: testId },
+//       {
+//         user: userId, // Ensure user is set
+//         test: testId,
+//         status: 'completed',
+//         score: totalScore,
+//         submittedAt: new Date(),
+//         answers: answerDetails
+//       },
+//       { new: true, upsert: true }
+//     );
+
+//     console.log(submission)
+//     // Save results
+//     const testResults = await Results.create({
+//       userId: userId, // Explicitly setting userId
+//       testId,
+//       courseId: test.course,
+//       score: totalScore,
+//       totalPossibleScore: test.questions.reduce((sum, q) => sum + (q.points || (q.questionType === 'objective' ? 1 : 5)), 0),
+//       totalQuestions: test.questions.length,
+//       status: 'completed',
+//       aiFailures,
+//       answers
+//     });
+
+//     console.log(testResults)
+
+//     res.json({
+//       success: true,
+//       totalScore,
+//       totalPossibleScore: test.questions.reduce((sum, q) => sum + (q.points || (q.questionType === 'objective' ? 1 : 5)), 0),
+//       answerDetails,
+//       aiFailures,
+//       gradingSystem: {
+//         theory: {
+//           criteria: ['answer_length', 'keyword_matching'],
+//           minWords: 20
+//         }
+//       }
+//     });
+
+//     console.log(
+//       totalScore,
+//       test.questions.reduce((sum, q) => sum + (q.points || (q.questionType === 'objective' ? 1 : 5)), 0),
+//       answerDetails,
+//       aiFailures,
+//       {
+//         gradingSystem: {
+//           theory: {
+//             criteria: ['answer_length', 'keyword_matching'],
+//             minWords: 20
+//           }
+//         }
+//       }
+//     )
+
+//   } catch (error) {
+//     console.error('Submission error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Internal server error',
+//       error: error.message
+//     });
+//   }
+// });
+
+router.post("/submit-test/:testId", protect, async (req, res) => {
+  try {
+    const { testId } = req.params;
+    const { answers } = req.body;
+    const userId = req.user.id;
+
+    // Input validation
+    if (!Array.isArray(answers)) {
+      return res.status(400).json({
+        success: false,
+        message: "Answers must be provided as an array",
+      });
+    }
+
+    const [test, user] = await Promise.all([
+      Test.findById(testId).populate("questions"),
+      User.findById(userId),
+    ]);
+
+    if (!test || !user) {
+      return res.status(404).json({
+        success: false,
+        message: "Test or user not found",
+      });
+    }
+
+    const isPremiumUser = user?.subscription?.status === "active";
+    const processingResults = await processAnswers(
+      userId,
+      testId,
+      answers,
+      test.questions,
+      isPremiumUser
+    );
+
+    // Save all data
+    const [submission, testResults] = await Promise.all([
+      saveTestSubmission(userId, testId, processingResults),
+      saveTestResults(userId, testId, test.course, {
+        ...processingResults,
+        answers: answers,
+      }),
+    ]);
+
+    // Prepare response
+    const response = buildSuccessResponse(test, processingResults);
+    res.json(response);
+  } catch (error) {
+    console.error("Test submission failed:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+router.post("/tests/detail", protect, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const getTestForUser = await Test.find({ userId: userId }).populate(
+      "questions",
+      "course",
+      "courseCode",
+      "testName",
+      "level",
+      "startTime",
+      "endTime",
+      "createdAt",
+      "duration",
+      "status"
+    );
+    console.log(getTestForUser);
+
+    res.json(getTestForUser);
+  } catch (error) {
+    res.status(500).json({ message: "Server Error" });
+    console.log(error);
   }
 });
 
 // Get all responses needing manual grading
-router.get('/grading/pending', protect, async (req, res) => {
+router.get("/grading/pending", protect, async (req, res) => {
   try {
     const responses = await Response.find({ needsManualGrading: true })
-      .populate('userId', 'name email')
-      .populate('question')
-      .populate('testId');
+      .populate("userId", "name email")
+      .populate("question")
+      .populate("testId");
 
     res.json(responses);
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
 // Update manual grading
-router.put('/grading/:responseId', protect, async (req, res) => {
+router.put("/grading/:responseId", protect, async (req, res) => {
   try {
     const { responseId } = req.params;
     const { pointsEarned, feedback } = req.body;
 
     const response = await Response.findById(responseId);
     if (!response) {
-      return res.status(404).json({ message: 'Response not found' });
+      return res.status(404).json({ message: "Response not found" });
     }
 
     response.pointsEarned = pointsEarned;
@@ -560,16 +804,15 @@ router.put('/grading/:responseId', protect, async (req, res) => {
 
     // Update the test submission total score
     await TestSubmission.updateOne(
-      { _id: response.testId, 'responses': responseId },
+      { _id: response.testId, responses: responseId },
       { $inc: { score: pointsEarned - (response.pointsEarned || 0) } }
     );
 
-    res.json({ message: 'Grading updated', response });
+    res.json({ message: "Grading updated", response });
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: "Server error" });
   }
 });
-
 
 module.exports = router;
 

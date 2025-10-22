@@ -6,6 +6,18 @@ const resultSchema = new mongoose.Schema({
     courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true },
     score: { type: Number, required: true },
     totalQuestions: { type: Number, required: true },
+    answers: [
+        {
+            questionId: {
+                type: mongoose.Schema.Types.ObjectId, ref: "Answer",
+                required: true
+            },
+            answer: {
+                type: String,
+                required: true
+            }
+        }
+    ],
     status: { type: String, enum: ['completed', 'pending'], default: 'completed' },
     createdAt: { type: Date, default: Date.now }
 })

@@ -1,111 +1,126 @@
-const express = require('express')
-const { google } = require('googleapis')
-const router = express.Router()
-const bcrypt = require('bcryptjs')
-const jwt = require('jsonwebtoken')
-const User = require('../../../models/User')
-const Admin = require('../../../models/Admin')
-const Course = require("../../../models/Courses")
-require('dotenv').config()
+const express = require("express");
+const { google } = require("googleapis");
+const router = express.Router();
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const User = require("../../../models/User");
+const Admin = require("../../../models/Admin");
+const Course = require("../../../models/Courses");
+require("dotenv").config();
 
 // Middleware to authenticate user JWT token
 const protect = async (req, res, next) => {
-  const token = req.header('Authorization')?.split(' ')[1]
+  // Get token from either Authorization header or cookie
+  const authHeader = req.header("Authorization");
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.split(" ")[1]
+    : req.cookies?.token;
+
+  console.log("Token found:", token ? "Yes" : "No");
+  console.log("Auth header:", authHeader);
+  console.log("Cookies:", req.cookies);
 
   if (!token) {
-    console.log('Access banned due to missing token')
-    return res.status(401).json({ message: 'Access banned.' })
+    console.log("Access denied - no token found in headers or cookies");
+    return res.status(401).json({
+      success: false,
+      message: "Access denied. No authentication token provided.",
+    });
   }
-  if (!req.headers.authorization) {
-    console.log('No token provided')
-    return res
-      .status(401)
-      .json({ message: 'Access denied. No token provided.' })
-  }
-  console.log('Authorization Header:', req.headers.authorization)
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = decoded
-    console.log('Decoded user:', req.user)
-    next()
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    console.log("Authenticated user:", decoded.id);
+    next();
   } catch (error) {
-    console.error('JWT verification failed:', error)
-    return res.status(403).json({ message: 'Invalid Token!.' })
+    console.error("JWT verification failed:", error.message);
+    return res.status(403).json({
+      success: false,
+      message: "Invalid or expired token. Please log in again.",
+    });
   }
-}
+};
 
 router.post("/admin/register", async (req, res) => {
-  const { username, email, password } = req.body
+  const { username, email, password } = req.body;
   if (!username || !email || !password) {
-    return res.status(400).json({ message: "All fields are required" })
+    return res.status(400).json({ message: "All fields are required" });
   }
   try {
-    const adminNumber = Math.floor(100000 + Math.random() * 900000)
-    const existingUserByEmail = await Admin.findOne({ email })
+    const adminNumber = Math.floor(100000 + Math.random() * 900000);
+    const existingUserByEmail = await Admin.findOne({ email });
     if (existingUserByEmail) {
-      console.log('Email is already in use')
-      return res.status(400).json({ message: 'Email used' })
+      console.log("Email is already in use");
+      return res.status(400).json({ message: "Email used" });
     }
-    const existingUserByUsername = await Admin.findOne({ username })
+    const existingUserByUsername = await Admin.findOne({ username });
     if (existingUserByUsername) {
-      console.log('Username already used')
-      return res.status(400).json({ message: 'Username already used' })
+      console.log("Username already used");
+      return res.status(400).json({ message: "Username already used" });
     }
 
     await Admin.create({
       username,
       email,
       password: await bcrypt.hash(password, 10),
-      adminNumber
-    })
-    console.log('Admin registered successfully')
+      adminNumber,
+    });
+    console.log("Admin registered successfully");
     return res.status(201).json({
-      message: 'Admin registered successfully', admin: {
+      message: "Admin registered successfully",
+      admin: {
         username,
         email,
-      }
-    })
+      },
+    });
+  } catch (error) {
+    console.error("Error checking existing admin:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error while checking existing admin" });
   }
-  catch (error) {
-    console.error('Error checking existing admin:', error)
-    return res.status(500).json({ message: 'Server error while checking existing admin' })
-  }
-})
+});
 
 // User registration
-router.post('/register', async (req, res) => {
+router.post("/register", async (req, res) => {
   const { username, email, password, courses } = req.body;
 
   if (!username || !email || !password || !courses || !Array.isArray(courses)) {
-    console.log('All fields are required, and courses must be an array');
-    return res.status(400).json({ message: 'All fields are required, and courses must be an array' });
+    console.log("All fields are required, and courses must be an array");
+    return res.status(400).json({
+      message: "All fields are required, and courses must be an array",
+    });
   }
 
   try {
-    const userNumber = Math.floor(100000 + Math.random() * 900000)
+    const userNumber = Math.floor(100000 + Math.random() * 900000);
     // Validate courses: Check if all provided courses exist
-    const courseIds = courses.map(course => course._id);
+    const courseIds = courses.map((course) => course._id);
     const validCourses = await Course.find({ _id: { $in: courseIds } });
 
     if (validCourses.length !== courseIds.length) {
-      console.log('One or more invalid courses selected');
-      return res.status(404).json({ message: 'One or more invalid courses selected' });
+      console.log("One or more invalid courses selected");
+      return res
+        .status(404)
+        .json({ message: "One or more invalid courses selected" });
     }
 
     // Check for existing user
     const existingUserByEmail = await User.findOne({ email });
-    if (existingUserByEmail) return res.status(400).json({ message: 'Email already used' });
-
+    if (existingUserByEmail) {
+      return res.status(400).json({ message: "Email already used" });
+    }
     const existingUserByUsername = await User.findOne({ username });
-    if (existingUserByUsername) return res.status(400).json({ message: 'Username already used' });
-
+    if (existingUserByUsername) {
+      return res.status(400).json({ message: "Username already used" });
+    }
     const existingUserByNumber = await User.findOne({ userNumber });
-    if (existingUserByNumber) return res.status(400).json({ message: 'User number already used' });
-
+    if (existingUserByNumber) {
+      return res.status(400).json({ message: "User number already used" });
+    }
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
 
     // Create user with full course details
     const user = new User({
@@ -113,7 +128,7 @@ router.post('/register', async (req, res) => {
       email,
       password: hashedPassword,
       userNumber: userNumber,
-      registeredCourses: validCourses.map(course => ({
+      registeredCourses: validCourses.map((course) => ({
         _id: course._id,
         name: course.name,
         description: course.description,
@@ -123,15 +138,18 @@ router.post('/register', async (req, res) => {
     await user.save();
 
     // Generate JWT token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN,
+    });
 
     // Send response
-    console.log('User registered successfully:', { user, token });
-    res.status(201).json({ message: 'User registered successfully', user, token });
-
+    console.log("User registered successfully:", { user, token });
+    res
+      .status(201)
+      .json({ message: "User registered successfully", user, token });
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ message: 'Error registering user', error });
+    console.error("Registration error:", error);
+    res.status(500).json({ message: "Error registering user", error });
   }
 });
 
@@ -139,44 +157,51 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_OAUTH_CLIENT,
   process.env.GOOGLE_OAUTH_CLIENT_SECRET,
   process.env.GOOGLE_OAUTH_REDIRECT_URL
-)
+);
 
-router.get('/google', (req, res) => {
+router.get("/google", (req, res) => {
   const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: ['profile', 'email']
-  })
-  res.redirect(url)
-})
+    access_type: "offline",
+    scope: ["profile", "email"],
+  });
+  res.redirect(url);
+});
 
-router.get('/google/callback', async (req, res) => {
-  const code = req.query.code
+router.get("/google/callback", async (req, res) => {
+  const { code } = req.query.code;
 
   try {
-    const { tokens } = await oauth2Client.getToken(code)
-    oauth2Client.setCredentials(tokens)
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
 
-    const oauth2 = google.oauth2({
-      auth: oauth2Client,
-      version: 'v2',
-    })
+    // const oauth2 = google.oauth2({
+    //   auth: oauth2Client,
+    //   version: 'v2',
+    // });
 
-    const { data } = await oauth2.userinfo.get()
+    // const { data } = await oauth2.userinfo.get();
 
-    const googleEmail = data.email
-    const googleName = data.name || data.email.split('@')[0]
-    const avatarUrl = data.picture
+    const { data } = await google
+      .oauth2("v2")
+      .userinfo.get({ auth: oauth2Client });
 
-    let user = await User.findOne({ email: googleEmail })
+    const googleEmail = data.email;
+    const googleName = (data.name || data.email.split("@")[0]).replace(
+      /\W+/g,
+      "_"
+    ); // Sanitize username
+    const avatarUrl = data.picture;
+
+    let user = await User.findOne({ email: googleEmail });
 
     if (!user) {
-      let userNumber
-      let isUnique = false
+      let userNumber;
+      let isUnique = false;
       while (!isUnique) {
-        userNumber = Math.floor(100000 + Math.random() * 900000)
-        const existingUser = await User.findOne({ userNumber })
+        userNumber = Math.floor(100000 + Math.random() * 900000);
+        const existingUser = await User.findOne({ userNumber });
         if (!existingUser) {
-          isUnique = true
+          isUnique = true;
         }
       }
 
@@ -185,58 +210,99 @@ router.get('/google/callback', async (req, res) => {
         email: googleEmail,
         password: await bcrypt.hash(Math.random().toString(36).slice(2), 10),
         userNumber,
-        registeredCourses: [],
         avatarUrl,
-        authProvider: 'google'
-      })
-      await user.save()
+        authProvider: "google",
+        subscription: { status: "inactive" },
+        registeredCourses: [],
+        status: "active",
+      });
+      await user.save();
     } else {
-      user.username = user.username || googleName
-      user.avatarUrl = user.avatarUrl || avatarUrl
-      user.authProvider = user.authProvider || 'google'
-      await user.save()
+      // Update existing user if needed
+      const updates = {};
+      if (!user.username) {
+        updates.username = googleName;
+      }
+      if (!user.avatarUrl) {
+        updates.avatarUrl = avatarUrl;
+      }
+      if (!user.authProvider) {
+        updates.authProvider = "google";
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await User.updateOne({ _id: user._id }, updates);
+      }
     }
 
+    // Create clean token payload without sensitive data
     const tokenPayload = {
       id: user._id,
       username: user.username,
       email: user.email,
-      registeredCourses: user.registeredCourses
-    }
+      avatarUrl: user.avatarUrl,
+      subscription: user.subscription,
+      role: user.role,
+      status: user.status,
+    };
 
-    console.log(data)
-    console.log(tokenPayload)
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN,
+    });
+    console.log(token);
 
-    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '1h' })
-    const encodedUser = encodeURIComponent(JSON.stringify(tokenPayload))
+    // Set the cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "none",
+      maxAge: 3600000,
+    });
 
-    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/google/callback?token=${token}&user=${encodedUser}`)
+    // Redirect to frontend with user data in URL (not recommended for sensitive data)
+    const userData = encodeURIComponent(
+      JSON.stringify({
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
+        subscription: user.subscription,
+        role: user.role,
+        status: user.status,
+      })
+    );
+
+    res.redirect(`${process.env.ALLOWED_ORIGINS}/auth/success?token=${token}`);
   } catch (error) {
-    console.error('Error during Google auhentication:', error.message)
-    res.status(500).json({ error: 'Authentication failed', details: error.message });
+    console.error("Error during Google authentication:", error);
+    res.redirect(
+      `${process.env.ALLOWED_ORIGINS}/auth/error?message=${encodeURIComponent(
+        "Authentication failed"
+      )}`
+    );
   }
-})
+});
 
-router.post('/courses/register', protect, async (req, res) => {
-  const { courseIds } = req.body
-  const userId = req.user.id
+router.post("/courses/register", protect, async (req, res) => {
+  const { courseIds } = req.body;
+  const userId = req.user?.id;
 
   if (!courseIds || !Array.isArray(courseIds)) {
-    console.log('Invalid course IDs')
-    return res.status(400).json({ message: 'Course IDs must be an array' })
+    console.log("Invalid course IDs");
+    return res.status(400).json({ message: "Course IDs must be an array" });
   }
 
   try {
     // Validate courses
     const validCourses = await Course.find({ _id: { $in: courseIds } });
     if (validCourses.length !== courseIds.length) {
-      return res.status(404).json({ message: 'One or more courses not found' });
+      return res.status(404).json({ message: "One or more courses not found" });
     }
 
     // Update user’s registeredCourses
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     // Add new courses, avoiding duplicates
@@ -259,38 +325,41 @@ router.post('/courses/register', protect, async (req, res) => {
       { $addToSet: { registeredUsers: userId } }
     );
 
-    res.status(200).json({ message: 'Courses registered successfully', courses: user.registeredCourses });
+    res.status(200).json({
+      message: "Courses registered successfully",
+      courses: user.registeredCourses,
+    });
   } catch (error) {
-    console.error('Error registering courses:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error registering courses:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
 // User login
-router.post('/login', async (req, res) => {
-  const { email, password } = req.body
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
 
   if (!email || !password) {
-    console.log('Email and password are required')
-    return res.status(400).json({ message: 'Email and password are required' })
+    console.log("Email and password are required");
+    return res.status(400).json({ message: "Email and password are required" });
   }
 
   try {
-    const user = await User.findOne({ email }).select('+password')
+    const user = await User.findOne({ email }).select("+password");
     if (!user) {
-      console.log('Invalid email')
-      return res.status(400).json({ message: 'Invalid email' })
+      console.log("Invalid email");
+      return res.status(400).json({ message: "Invalid email" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password)
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      console.log('Invalid password')
-      return res.status(400).json({ message: 'Invalid password' })
+      console.log("Invalid password");
+      return res.status(400).json({ message: "Invalid password" });
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '1h'
-    })
+      expiresIn: process.env.JWT_EXPIRES_IN || process.env.JWT_EXPIRES_IN,
+    });
 
     const userDetails = {
       id: user._id,
@@ -298,46 +367,47 @@ router.post('/login', async (req, res) => {
       email: user.email,
       age: user.age,
       userNumber: user.userNumber,
-      registeredCourses: user.registeredCourses
-    }
+      registeredCourses: user.registeredCourses,
+      subscription: user.subscription,
+    };
 
-    console.log('Login successful:', { user: userDetails, token })
+    console.log("Login successful:", { user: userDetails, token });
     return res.status(200).json({
-      message: 'Login successful.',
+      message: "Login successful.",
       user: userDetails,
-      token
-    })
+      token,
+    });
   } catch (error) {
-    console.error('Login error:', error)
-    return res.status(500).json({ message: 'Login error.', error })
+    console.error("Login error:", error);
+    return res.status(500).json({ message: "Login error.", error });
   }
-})
+});
 
 // Admin login
-router.post('/admin/login', async (req, res) => {
-  const { email, password } = req.body
+router.post("/admin/login", async (req, res) => {
+  const { email, password } = req.body;
 
   if (!email || !password) {
-    console.log('Email and password are required')
-    return res.status(400).json({ message: 'Email and password are required' })
+    console.log("Email and password are required");
+    return res.status(400).json({ message: "Email and password are required" });
   }
 
   try {
-    const user = await Admin.findOne({ email }).select('+password')
+    const user = await Admin.findOne({ email }).select("+password");
     if (!user) {
-      console.log('Invalid email')
-      return res.status(400).json({ message: 'Invalid email' })
+      console.log("Invalid email");
+      return res.status(400).json({ message: "Invalid email" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password)
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      console.log('Invalid password')
-      return res.status(400).json({ message: 'Invalid password' })
+      console.log("Invalid password");
+      return res.status(400).json({ message: "Invalid password" });
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '1h'
-    })
+      expiresIn: process.env.JWT_EXPIRES_IN,
+    });
 
     const userDetails = {
       id: user._id,
@@ -345,20 +415,58 @@ router.post('/admin/login', async (req, res) => {
       email: user.email,
       age: user.age,
       userNumber: user.userNumber,
-      registeredCourses: user.registeredCourses
-    }
+      registeredCourses: user.registeredCourses,
+    };
 
-    console.log('Login successful:', { user: userDetails, token })
+    console.log("Login successful:", { user: userDetails, token });
     return res.status(200).json({
-      message: 'Login successful.',
+      message: "Login successful.",
       user: userDetails,
-      token
-    })
+      token,
+    });
   } catch (error) {
-    console.error('Login error:', error)
-    return res.status(500).json({ message: 'Login error.', error })
+    console.error("Login error:", error);
+    return res.status(500).json({ message: "Login error.", error });
   }
-})
+});
 
+router.get("/verify", protect, async (req, res) => {
+  try {
+    res.json({
+      authenticated: true,
+      user: {
+        id: req.user.id,
+        username: req.user.username,
+        email: req.user.email,
+        avatarUrl: req.user.avatarUrl,
+        role: req.user.role,
+        subscription: req.user.subscription,
+      },
+      token: req.cookies.token,
+    });
+    // const user = await User.findById(req.user?.id)
+    //   .select('-password -__v')
+    //   .lean();
 
-module.exports = { router, protect }
+    // if (!user) {
+    //   return res.status(404).json({ error: 'User not found' });
+    // }
+
+    // if (!user) {
+    //   return res.status(404).json({ error: 'User not found' });
+    // }
+
+    // res.json({ user });
+
+    // const response = { user };
+    // if (!process.env.HTTP_ONLY_COOKIES) {
+    //   response.token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    // }
+
+    // res.json(response);
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+module.exports = { router, protect };
