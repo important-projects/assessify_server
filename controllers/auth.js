@@ -53,12 +53,10 @@ const authController = {
       });
     } catch (error) {
       console.error("Error checking existing admin:", error);
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Server error while checking existing admin",
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Server error while checking existing admin",
+      });
     }
   },
 
@@ -126,11 +124,9 @@ const authController = {
       !Array.isArray(courses)
     ) {
       console.log("All fields are required, and courses must be an array");
-      return res
-        .status(400)
-        .json({
-          message: "All fields are required, and courses must be an array",
-        });
+      return res.status(400).json({
+        message: "All fields are required, and courses must be an array",
+      });
     }
 
     try {
@@ -141,12 +137,10 @@ const authController = {
 
       if (validCourses.length !== courseIds.length) {
         console.log("One or more invalid courses selected");
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "One or more invalid courses selected",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "One or more invalid courses selected",
+        });
       }
 
       // Check for existing user
@@ -187,14 +181,12 @@ const authController = {
 
       // Send response
       console.log("User registered successfully:", { user, token });
-      res
-        .status(201)
-        .json({
-          success: true,
-          message: "User registered successfully",
-          user,
-          token,
-        });
+      res.status(201).json({
+        success: true,
+        message: "User registered successfully",
+        user,
+        token,
+      });
     } catch (error) {
       console.error("Registration error:", error);
       res
@@ -399,7 +391,7 @@ const authController = {
 
   courseRegistration: async (req, res) => {
     const { courseIds } = req.body;
-    const userId = req.user.id;
+    const userId = req.user?.id;
 
     if (!courseIds || !Array.isArray(courseIds)) {
       console.log("Invalid course IDs");
@@ -442,13 +434,11 @@ const authController = {
         { $addToSet: { registeredUsers: userId } }
       );
 
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: "Courses registered successfully",
-          courses: user.registeredCourses,
-        });
+      res.status(200).json({
+        success: true,
+        message: "Courses registered successfully",
+        courses: user.registeredCourses,
+      });
     } catch (error) {
       console.error("Error registering courses:", error);
       res.status(500).json({ success: false, message: "Server error" });
